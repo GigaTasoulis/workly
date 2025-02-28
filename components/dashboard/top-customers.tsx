@@ -54,7 +54,7 @@ export function TopCustomers() {
                 <p className="text-xs text-muted-foreground">{customer.email}</p>
               </div>
             </div>
-            <p className="text-sm font-medium">${customer.value.toLocaleString()}</p>
+            <p className="text-sm font-medium">€{customer.value.toLocaleString()}</p>
           </div>
           <Progress value={(customer.value / customer.maxValue) * 100} className="h-2" />
         </div>

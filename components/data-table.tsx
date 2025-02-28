@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { PlusCircle, Search, Pencil } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/components/ui/use-toast"
+import { translations as t } from "@/lib/translations"
 
 interface Column {
   key: string
@@ -56,7 +57,7 @@ export function DataTable({ columns, data, onAdd, onEdit, onDelete, onSelect }: 
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search..."
+            placeholder={t.search}
             className="pl-8"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -64,7 +65,7 @@ export function DataTable({ columns, data, onAdd, onEdit, onDelete, onSelect }: 
         </div>
         <Button onClick={onAdd}>
           <PlusCircle className="mr-2 h-4 w-4" />
-          Add New
+          {t.add}
         </Button>
       </div>
 
@@ -75,7 +76,7 @@ export function DataTable({ columns, data, onAdd, onEdit, onDelete, onSelect }: 
               {columns.map((column) => (
                 <TableHead key={column.key}>{column.label}</TableHead>
               ))}
-              <TableHead className="w-[100px]">Actions</TableHead>
+              <TableHead className="w-[100px]">{t.actions}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -104,7 +105,7 @@ export function DataTable({ columns, data, onAdd, onEdit, onDelete, onSelect }: 
                             onEdit(item)
                           }}
                         >
-                          Edit
+                          {t.edit}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={(e) => {
@@ -113,7 +114,7 @@ export function DataTable({ columns, data, onAdd, onEdit, onDelete, onSelect }: 
                           }}
                           className="text-red-600"
                         >
-                          Delete
+                          {t.delete}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -123,7 +124,7 @@ export function DataTable({ columns, data, onAdd, onEdit, onDelete, onSelect }: 
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length + 1} className="h-24 text-center">
-                  No results found.
+                  {t.noResults}
                 </TableCell>
               </TableRow>
             )}

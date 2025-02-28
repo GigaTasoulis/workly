@@ -1,3 +1,5 @@
+"use client"
+
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Building2, Users, Briefcase, ShoppingBag, DollarSign, Clock, BarChart } from "lucide-react"
 import Link from "next/link"
@@ -5,12 +7,13 @@ import { RecentActivity } from "@/components/dashboard/recent-activity"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { OverviewChart } from "@/components/dashboard/overview-chart"
 import { TopCustomers } from "@/components/dashboard/top-customers"
+import { translations as t } from "@/lib/translations"
 
 export default function Home() {
   const modules = [
     {
-      title: "Suppliers",
-      description: "Manage your suppliers and vendor relationships",
+      title: t.suppliers,
+      description: t.manageSuppliers,
       icon: <ShoppingBag className="h-8 w-8" />,
       href: "/suppliers",
       color: "bg-blue-100 dark:bg-blue-900",
@@ -18,8 +21,8 @@ export default function Home() {
       count: 24,
     },
     {
-      title: "Workplaces",
-      description: "Manage your office locations and work sites",
+      title: t.workplaces,
+      description: t.manageWorkplaces,
       icon: <Building2 className="h-8 w-8" />,
       href: "/workplaces",
       color: "bg-green-100 dark:bg-green-900",
@@ -27,8 +30,8 @@ export default function Home() {
       count: 8,
     },
     {
-      title: "Customers",
-      description: "Manage your customer relationships and data",
+      title: t.customers,
+      description: t.manageCustomers,
       icon: <Users className="h-8 w-8" />,
       href: "/customers",
       color: "bg-purple-100 dark:bg-purple-900",
@@ -36,8 +39,8 @@ export default function Home() {
       count: 156,
     },
     {
-      title: "Employees",
-      description: "Manage your team members and staff",
+      title: t.employees,
+      description: t.manageEmployees,
       icon: <Briefcase className="h-8 w-8" />,
       href: "/employees",
       color: "bg-amber-100 dark:bg-amber-900",
@@ -48,30 +51,30 @@ export default function Home() {
 
   const stats = [
     {
-      title: "Total Revenue",
-      value: "$45,231.89",
-      description: "12% increase from last month",
+      title: t.totalRevenue,
+      value: "€45.231,89",
+      description: `12% ${t.moreLastMonth}`,
       icon: <DollarSign className="h-4 w-4 text-muted-foreground" />,
       trend: "up",
     },
     {
-      title: "New Customers",
+      title: t.newCustomers,
       value: "12",
-      description: "3 more than last week",
+      description: `3 ${t.moreThanLastWeek}`,
       icon: <Users className="h-4 w-4 text-muted-foreground" />,
       trend: "up",
     },
     {
-      title: "Active Projects",
+      title: t.activeProjects,
       value: "24",
-      description: "2 completed this week",
+      description: `2 ${t.completedThisWeek}`,
       icon: <BarChart className="h-4 w-4 text-muted-foreground" />,
       trend: "neutral",
     },
     {
-      title: "Avg. Response Time",
-      value: "3.2 hours",
-      description: "14% faster than last month",
+      title: t.avgResponseTime,
+      value: `3.2 ${t.hours}`,
+      description: `14% ${t.fasterThanLastMonth}`,
       icon: <Clock className="h-4 w-4 text-muted-foreground" />,
       trend: "up",
     },
@@ -80,8 +83,10 @@ export default function Home() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome to Work-ly, your business management solution.</p>
+        <h1 className="text-3xl font-bold tracking-tight">{t.dashboard}</h1>
+        <p className="text-muted-foreground">
+          {t.welcome}, {t.businessManagementSolution}.
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -104,7 +109,9 @@ export default function Home() {
                 <CardDescription>{module.description}</CardDescription>
               </CardContent>
               <CardFooter>
-                <p className="text-sm font-medium">{module.count} total</p>
+                <p className="text-sm font-medium">
+                  {module.count} {t.total}
+                </p>
               </CardFooter>
             </Card>
           </Link>
@@ -114,8 +121,8 @@ export default function Home() {
       <div className="grid gap-6 md:grid-cols-7">
         <Card className="md:col-span-4">
           <CardHeader>
-            <CardTitle>Overview</CardTitle>
-            <CardDescription>Business performance over the last 30 days</CardDescription>
+            <CardTitle>{t.overview}</CardTitle>
+            <CardDescription>{t.businessPerformance}</CardDescription>
           </CardHeader>
           <CardContent>
             <OverviewChart />
@@ -123,8 +130,8 @@ export default function Home() {
         </Card>
         <Card className="md:col-span-3">
           <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest updates across your business</CardDescription>
+            <CardTitle>{t.recentActivity}</CardTitle>
+            <CardDescription>{t.latestUpdates}</CardDescription>
           </CardHeader>
           <CardContent>
             <RecentActivity />
@@ -135,8 +142,8 @@ export default function Home() {
       <div className="grid gap-6 md:grid-cols-7">
         <Card className="md:col-span-3">
           <CardHeader>
-            <CardTitle>Top Customers</CardTitle>
-            <CardDescription>Your highest value customers</CardDescription>
+            <CardTitle>{t.topCustomers}</CardTitle>
+            <CardDescription>{t.highestValueCustomers}</CardDescription>
           </CardHeader>
           <CardContent>
             <TopCustomers />
@@ -144,8 +151,8 @@ export default function Home() {
         </Card>
         <Card className="md:col-span-4">
           <CardHeader>
-            <CardTitle>Upcoming Tasks</CardTitle>
-            <CardDescription>Tasks requiring your attention</CardDescription>
+            <CardTitle>{t.upcomingTasks}</CardTitle>
+            <CardDescription>{t.tasksRequiringAttention}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -154,8 +161,10 @@ export default function Home() {
                   <Clock className="h-4 w-4 text-blue-700 dark:text-blue-300" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">Supplier contract renewal</p>
-                  <p className="text-sm text-muted-foreground">Office Supplies Inc. contract expires in 7 days</p>
+                  <p className="text-sm font-medium">{t.supplierContractRenewal}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Office Supplies Inc. {t.contractExpires} 7 {t.days}
+                  </p>
                 </div>
               </div>
               <div className="flex items-start gap-4 rounded-md border p-4">
@@ -163,8 +172,10 @@ export default function Home() {
                   <Users className="h-4 w-4 text-amber-700 dark:text-amber-300" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">Employee onboarding</p>
-                  <p className="text-sm text-muted-foreground">3 new employees starting next Monday</p>
+                  <p className="text-sm font-medium">{t.employeeOnboarding}</p>
+                  <p className="text-sm text-muted-foreground">
+                    3 {t.newEmployeesStarting} {t.nextMonday}
+                  </p>
                 </div>
               </div>
               <div className="flex items-start gap-4 rounded-md border p-4">
@@ -172,8 +183,8 @@ export default function Home() {
                   <Building2 className="h-4 w-4 text-green-700 dark:text-green-300" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">Workplace inspection</p>
-                  <p className="text-sm text-muted-foreground">Annual safety inspection for Downtown Office due</p>
+                  <p className="text-sm font-medium">{t.workplaceInspection}</p>
+                  <p className="text-sm text-muted-foreground">{t.annualSafetyInspection}</p>
                 </div>
               </div>
             </div>

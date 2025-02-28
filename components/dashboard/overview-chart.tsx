@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { translations as t } from "@/lib/translations"
 
 export function OverviewChart() {
   const [mounted, setMounted] = useState(false)
@@ -12,62 +13,62 @@ export function OverviewChart() {
 
   const data = [
     {
-      name: "Jan",
+      name: t.months.jan,
       revenue: 4000,
       expenses: 2400,
     },
     {
-      name: "Feb",
+      name: t.months.feb,
       revenue: 3000,
       expenses: 1398,
     },
     {
-      name: "Mar",
+      name: t.months.mar,
       revenue: 2000,
       expenses: 1800,
     },
     {
-      name: "Apr",
+      name: t.months.apr,
       revenue: 2780,
       expenses: 3908,
     },
     {
-      name: "May",
+      name: t.months.may,
       revenue: 1890,
       expenses: 4800,
     },
     {
-      name: "Jun",
+      name: t.months.jun,
       revenue: 2390,
       expenses: 3800,
     },
     {
-      name: "Jul",
+      name: t.months.jul,
       revenue: 3490,
       expenses: 4300,
     },
     {
-      name: "Aug",
+      name: t.months.aug,
       revenue: 4000,
       expenses: 2400,
     },
     {
-      name: "Sep",
+      name: t.months.sep,
       revenue: 5000,
       expenses: 3398,
     },
     {
-      name: "Oct",
+      name: t.months.oct,
       revenue: 6000,
       expenses: 4800,
     },
     {
-      name: "Nov",
+      name: t.months.nov,
       revenue: 7000,
       expenses: 5800,
     },
     {
-      name: "Dec",
+      name: t.months.dec,
       revenue: 9000,
       expenses: 6800,
     },
@@ -86,11 +87,14 @@ export function OverviewChart() {
           fontSize={12}
           tickLine={false}
           axisLine={false}
-          tickFormatter={(value) => `$${value}`}
+          tickFormatter={(value) => `€${value}`}
         />
-        <Tooltip formatter={(value) => [`$${value}`, ""]} labelFormatter={(label) => `Month: ${label}`} />
-        <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Revenue" />
-        <Bar dataKey="expenses" fill="hsl(var(--muted))" radius={[4, 4, 0, 0]} name="Expenses" />
+        <Tooltip
+          formatter={(value) => [`€${value}`, ""]}
+          labelFormatter={(label) => `${t.months[label.toLowerCase()]}`}
+        />
+        <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name={t.revenue} />
+        <Bar dataKey="expenses" fill="hsl(var(--muted))" radius={[4, 4, 0, 0]} name={t.expenses} />
       </BarChart>
     </ResponsiveContainer>
   )

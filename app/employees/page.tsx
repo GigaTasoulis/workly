@@ -19,6 +19,7 @@ import { Briefcase, Mail, Phone, Building2, Calendar, FileText, Clock, Graduatio
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
+import { translations as t } from "@/lib/translations" // Import translation keys
 
 interface Employee {
   id: string
@@ -47,16 +48,16 @@ const initialEmployee: Employee = {
 }
 
 const departments = [
-  "Management",
-  "Sales",
-  "Marketing",
-  "Engineering",
-  "Finance",
-  "Human Resources",
-  "Customer Support",
-  "Operations",
-  "Research & Development",
-  "Legal",
+  t.management,
+  t.sales,
+  t.marketing,
+  t.engineering,
+  t.finance,
+  t.humanResources,
+  t.customerSupport,
+  t.operations,
+  t.researchDevelopment,
+  t.legal,
 ]
 
 export default function EmployeesPage() {
@@ -128,8 +129,8 @@ export default function EmployeesPage() {
     if (isEditing) {
       updatedEmployees = employees.map((employee) => (employee.id === currentEmployee.id ? currentEmployee : employee))
       toast({
-        title: "Employee updated",
-        description: "The employee has been successfully updated.",
+        title: t.employeeUpdated,
+        description: "Ο υπάλληλος ενημερώθηκε με επιτυχία.",
       })
 
       // Update selected employee if it's the one being edited
@@ -143,8 +144,8 @@ export default function EmployeesPage() {
       }
       updatedEmployees = [...employees, newEmployee]
       toast({
-        title: "Employee added",
-        description: "The employee has been successfully added.",
+        title: t.employeeAdded,
+        description: "Ο υπάλληλος προστέθηκε με επιτυχία.",
       })
     }
 
@@ -165,7 +166,7 @@ export default function EmployeesPage() {
 
   // Calculate employee tenure
   const calculateTenure = (hireDate: string) => {
-    if (!hireDate) return "Not specified"
+    if (!hireDate) return t.notSpecified
 
     const hire = new Date(hireDate)
     const now = new Date()
@@ -174,10 +175,10 @@ export default function EmployeesPage() {
     const monthDiff = now.getMonth() - hire.getMonth()
 
     if (monthDiff < 0) {
-      return `${yearDiff - 1} years, ${monthDiff + 12} months`
+      return `${yearDiff - 1} ${t.years}, ${monthDiff + 12} ${t.months}`
     }
 
-    return `${yearDiff} years, ${monthDiff} months`
+    return `${yearDiff} ${t.years}, ${monthDiff} ${t.months}`
   }
 
   // Generate mock performance metrics
@@ -226,8 +227,8 @@ export default function EmployeesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Employees</h1>
-        <p className="text-muted-foreground">Manage your team members and staff.</p>
+        <h1 className="text-3xl font-bold tracking-tight">{t.employeesTitle}</h1>
+        <p className="text-muted-foreground">{t.manageTeam}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -238,7 +239,7 @@ export default function EmployeesPage() {
             onAdd={handleAddNew}
             onEdit={handleEdit}
             onDelete={handleDelete}
-            onRowClick={handleRowClick}
+            onSelect={setSelectedEmployee}
           />
         </div>
 
@@ -270,9 +271,9 @@ export default function EmployeesPage() {
               <CardContent>
                 <Tabs defaultValue="details">
                   <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="details">Details</TabsTrigger>
-                    <TabsTrigger value="employment">Employment</TabsTrigger>
-                    <TabsTrigger value="performance">Performance</TabsTrigger>
+                    <TabsTrigger value="details">{t.details}</TabsTrigger>
+                    <TabsTrigger value="employment">{t.employmentDetails}</TabsTrigger>
+                    <TabsTrigger value="performance">{t.performance}</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="details" className="space-y-4 pt-4">
@@ -371,7 +372,12 @@ export default function EmployeesPage() {
                       {Object.entries(getPerformanceMetrics(selectedEmployee.id)).map(([key, value]) => (
                         <div key={key} className="space-y-2">
                           <div className="flex justify-between">
-                            <h3 className="text-sm font-medium capitalize">{key}</h3>
+                            <h3 className="text-sm font-medium">
+                              {key === "productivity" && t.productivity}
+                              {key === "attendance" && t.attendance}
+                              {key === "teamwork" && t.teamwork}
+                              {key === "quality" && t.quality}
+                            </h3>
                             <span className="text-sm text-muted-foreground">{value}%</span>
                           </div>
                           <Progress value={value} className="h-2" />
@@ -380,13 +386,13 @@ export default function EmployeesPage() {
                     </div>
 
                     <div className="mt-6 space-y-2">
-                      <h3 className="text-sm font-medium">Recent Achievements</h3>
+                      <h3 className="text-sm font-medium">{t.recentAchievements}</h3>
                       <div className="space-y-2">
                         <div className="flex items-start gap-2 rounded-md border p-2">
                           <Award className="h-4 w-4 text-muted-foreground mt-0.5" />
                           <div>
-                            <p className="text-sm font-medium">Employee of the Month</p>
-                            <p className="text-xs text-muted-foreground">Awarded for outstanding performance</p>
+                            <p className="text-sm font-medium">{t.employeeOfTheMonth}</p>
+                            <p className="text-xs text-muted-foreground">{t.outstandingPerformance}</p>
                           </div>
                         </div>
                       </div>
@@ -398,16 +404,13 @@ export default function EmployeesPage() {
           ) : (
             <Card>
               <CardHeader>
-                <CardTitle>No Employee Selected</CardTitle>
-                <CardDescription>Select an employee to view details</CardDescription>
+                <CardTitle>{t.noEmployeeSelected}</CardTitle>
+                <CardDescription>{t.selectEmployee}</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Click on an employee from the list to view their complete details, employment history, and performance
-                  metrics. You can also add a new employee using the "Add New" button.
-                </p>
+                <p className="text-sm text-muted-foreground">{t.selectEmployee}</p>
                 <Button onClick={handleAddNew} className="mt-4 w-full">
-                  Add New Employee
+                  {t.addNewEmployee}
                 </Button>
               </CardContent>
             </Card>
@@ -418,13 +421,13 @@ export default function EmployeesPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>{isEditing ? "Edit Employee" : "Add New Employee"}</DialogTitle>
+            <DialogTitle>{isEditing ? t.editEmployee : t.addNewEmployee}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name *</Label>
+                  <Label htmlFor="firstName">{t.firstName} *</Label>
                   <Input
                     id="firstName"
                     value={currentEmployee.firstName}
@@ -433,7 +436,7 @@ export default function EmployeesPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name *</Label>
+                  <Label htmlFor="lastName">{t.lastName} *</Label>
                   <Input
                     id="lastName"
                     value={currentEmployee.lastName}
@@ -444,7 +447,7 @@ export default function EmployeesPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email *</Label>
+                  <Label htmlFor="email">{t.email} *</Label>
                   <Input
                     id="email"
                     type="email"
@@ -454,7 +457,7 @@ export default function EmployeesPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
+                  <Label htmlFor="phone">{t.phone}</Label>
                   <Input
                     id="phone"
                     value={currentEmployee.phone}
@@ -464,7 +467,7 @@ export default function EmployeesPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="position">Position</Label>
+                  <Label htmlFor="position">{t.position}</Label>
                   <Input
                     id="position"
                     value={currentEmployee.position}
@@ -472,7 +475,7 @@ export default function EmployeesPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="department">Department</Label>
+                  <Label htmlFor="department">{t.department}</Label>
                   <Select
                     value={currentEmployee.department}
                     onValueChange={(value) => setCurrentEmployee({ ...currentEmployee, department: value })}
@@ -492,7 +495,7 @@ export default function EmployeesPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="hireDate">Hire Date</Label>
+                  <Label htmlFor="hireDate">{t.hireDate}</Label>
                   <Input
                     id="hireDate"
                     type="date"
@@ -501,7 +504,7 @@ export default function EmployeesPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="workplaceId">Workplace</Label>
+                  <Label htmlFor="workplaceId">{t.workplace}</Label>
                   <Select
                     value={currentEmployee.workplaceId}
                     onValueChange={(value) => setCurrentEmployee({ ...currentEmployee, workplaceId: value })}
@@ -520,7 +523,7 @@ export default function EmployeesPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
+                <Label htmlFor="notes">{t.notes}</Label>
                 <Textarea
                   id="notes"
                   value={currentEmployee.notes}
@@ -531,9 +534,9 @@ export default function EmployeesPage() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancel
+                {t.cancel}
               </Button>
-              <Button type="submit">{isEditing ? "Update" : "Add"}</Button>
+              <Button type="submit">{isEditing ? t.update : t.add}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

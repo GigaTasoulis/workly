@@ -13,8 +13,9 @@ import { useToast } from "@/components/ui/use-toast"
 import { generateId, getLocalData, setLocalData } from "@/lib/utils"
 import { initializeData } from "@/lib/data"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ShoppingBag, Mail, Phone, MapPin, FileText } from "lucide-react"
+import { translations as t } from "@/lib/translations"
 
 interface Supplier {
   id: string
@@ -37,6 +38,7 @@ const initialSupplier: Supplier = {
 }
 
 export default function SuppliersPage() {
+  // const { t } = useTranslation("common")
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [currentSupplier, setCurrentSupplier] = useState<Supplier>(initialSupplier)
@@ -101,8 +103,8 @@ export default function SuppliersPage() {
     if (isEditing) {
       updatedSuppliers = suppliers.map((supplier) => (supplier.id === currentSupplier.id ? currentSupplier : supplier))
       toast({
-        title: "Supplier updated",
-        description: "The supplier has been successfully updated.",
+        title: t.supplierUpdated,
+        description: "Ο προμηθευτής ενημερώθηκε με επιτυχία.",
       })
 
       // Update selected supplier if it's the one being edited
@@ -116,8 +118,8 @@ export default function SuppliersPage() {
       }
       updatedSuppliers = [...suppliers, newSupplier]
       toast({
-        title: "Supplier added",
-        description: "The supplier has been successfully added.",
+        title: t.supplierAdded,
+        description: "Ο προμηθευτής προστέθηκε με επιτυχία.",
       })
     }
 
@@ -133,8 +135,8 @@ export default function SuppliersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Suppliers</h1>
-        <p className="text-muted-foreground">Manage your suppliers and vendor relationships.</p>
+        <h1 className="text-3xl font-bold tracking-tight">{t.suppliersTitle}</h1>
+        <p className="text-muted-foreground">{t.manageSupplierVendors}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -145,7 +147,7 @@ export default function SuppliersPage() {
             onAdd={handleAddNew}
             onEdit={handleEdit}
             onDelete={handleDelete}
-            onRowClick={handleRowClick}
+            onSelect={setSelectedSupplier}
           />
         </div>
 
@@ -224,16 +226,13 @@ export default function SuppliersPage() {
           ) : (
             <Card>
               <CardHeader>
-                <CardTitle>No Supplier Selected</CardTitle>
-                <CardDescription>Select a supplier to view details</CardDescription>
+                <CardTitle>{t.noSupplierSelected}</CardTitle>
+                <CardDescription>{t.selectSupplier}</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Click on a supplier from the list to view their complete details here. You can also add a new supplier
-                  using the "Add New" button.
-                </p>
+                <p className="text-sm text-muted-foreground">{t.selectSupplierDetails}</p>
                 <Button onClick={handleAddNew} className="mt-4 w-full">
-                  Add New Supplier
+                  {t.addNewSupplier}
                 </Button>
               </CardContent>
             </Card>
@@ -244,13 +243,13 @@ export default function SuppliersPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>{isEditing ? "Edit Supplier" : "Add New Supplier"}</DialogTitle>
+            <DialogTitle>{isEditing ? t.editSupplier : t.addNewSupplier}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Name *</Label>
+                  <Label htmlFor="name">{t.supplierName} *</Label>
                   <Input
                     id="name"
                     value={currentSupplier.name}
@@ -259,7 +258,7 @@ export default function SuppliersPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="contactPerson">Contact Person</Label>
+                  <Label htmlFor="contactPerson">{t.contactPerson}</Label>
                   <Input
                     id="contactPerson"
                     value={currentSupplier.contactPerson}
@@ -269,7 +268,7 @@ export default function SuppliersPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email *</Label>
+                  <Label htmlFor="email">{t.email} *</Label>
                   <Input
                     id="email"
                     type="email"
@@ -279,7 +278,7 @@ export default function SuppliersPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
+                  <Label htmlFor="phone">{t.phone}</Label>
                   <Input
                     id="phone"
                     value={currentSupplier.phone}
@@ -288,7 +287,7 @@ export default function SuppliersPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="address">Address</Label>
+                <Label htmlFor="address">{t.address}</Label>
                 <Input
                   id="address"
                   value={currentSupplier.address}
@@ -296,7 +295,7 @@ export default function SuppliersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
+                <Label htmlFor="notes">{t.notes}</Label>
                 <Textarea
                   id="notes"
                   value={currentSupplier.notes}
@@ -307,9 +306,9 @@ export default function SuppliersPage() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancel
+                {t.cancel}
               </Button>
-              <Button type="submit">{isEditing ? "Update" : "Add"}</Button>
+              <Button type="submit">{isEditing ? t.update : t.add}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

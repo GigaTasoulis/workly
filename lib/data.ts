@@ -1,5 +1,3 @@
-// Sample data for the application
-
 export const sampleSuppliers = [
   {
     id: "sup-001",

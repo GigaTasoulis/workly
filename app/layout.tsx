@@ -8,9 +8,8 @@ import { Toaster } from "@/components/ui/toaster"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Work-ly | Business Management",
-  description: "Manage your business data efficiently",
-    generator: 'v0.dev'
+  title: "Work-ly | Διαχείριση Επιχείρησης",
+  description: "Διαχειριστείτε αποτελεσματικά τα δεδομένα της επιχείρησής σας",
 }
 
 export default function RootLayout({
@@ -31,6 +30,3 @@ export default function RootLayout({
   )
 }
 
-
-
-import './globals.css'

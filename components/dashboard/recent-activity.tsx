@@ -2,15 +2,16 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ShoppingBag, Users, Building2, Briefcase } from "lucide-react"
+import { translations as t } from "@/lib/translations"
 
 export function RecentActivity() {
   const activities = [
     {
       id: 1,
       type: "customer",
-      action: "New customer added",
+      action: t.newCustomerAdded,
       name: "Acme Corporation",
-      time: "2 hours ago",
+      time: `2 ${t.hoursAgo}`,
       icon: <Users className="h-4 w-4" />,
       iconColor: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
       avatar: "/placeholder.svg",
@@ -18,9 +19,9 @@ export function RecentActivity() {
     {
       id: 2,
       type: "supplier",
-      action: "Updated supplier details",
+      action: t.updatedSupplierDetails,
       name: "Tech Solutions Inc.",
-      time: "4 hours ago",
+      time: `4 ${t.hoursAgo}`,
       icon: <ShoppingBag className="h-4 w-4" />,
       iconColor: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
       avatar: "/placeholder.svg",
@@ -28,9 +29,9 @@ export function RecentActivity() {
     {
       id: 3,
       type: "employee",
-      action: "Employee status changed",
+      action: t.employeeStatusChanged,
       name: "Sarah Johnson",
-      time: "Yesterday",
+      time: t.yesterday,
       icon: <Briefcase className="h-4 w-4" />,
       iconColor: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
       avatar: "/placeholder.svg",
@@ -38,9 +39,9 @@ export function RecentActivity() {
     {
       id: 4,
       type: "workplace",
-      action: "New workplace added",
+      action: t.newWorkplaceAdded,
       name: "Downtown Office",
-      time: "2 days ago",
+      time: `2 ${t.daysAgo}`,
       icon: <Building2 className="h-4 w-4" />,
       iconColor: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
       avatar: "/placeholder.svg",

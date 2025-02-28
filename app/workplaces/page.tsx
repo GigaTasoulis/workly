@@ -11,6 +11,10 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { generateId, getLocalData, setLocalData } from "@/lib/utils"
+import { translations as t } from "@/lib/translations"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Building2, MapPin, Users, FileText } from "lucide-react"
 
 interface Workplace {
   id: string
@@ -39,6 +43,7 @@ export default function WorkplacesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [currentWorkplace, setCurrentWorkplace] = useState<Workplace>(initialWorkplace)
   const [isEditing, setIsEditing] = useState(false)
+  const [selectedWorkplace, setSelectedWorkplace] = useState<Workplace | null>(null)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -47,10 +52,10 @@ export default function WorkplacesPage() {
   }, [])
 
   const columns = [
-    { key: "name", label: "Name" },
-    { key: "address", label: "Address" },
-    { key: "city", label: "City" },
-    { key: "capacity", label: "Capacity" },
+    { key: "name", label: t.workplaceName },
+    { key: "address", label: t.address },
+    { key: "city", label: t.city },
+    { key: "capacity", label: t.capacity },
   ]
 
   const handleAddNew = () => {
@@ -69,6 +74,11 @@ export default function WorkplacesPage() {
     const updatedWorkplaces = workplaces.filter((workplace) => workplace.id !== id)
     setWorkplaces(updatedWorkplaces)
     setLocalData("workplaces", updatedWorkplaces)
+
+    // If the deleted workplace is currently selected, clear the selection
+    if (selectedWorkplace && selectedWorkplace.id === id) {
+      setSelectedWorkplace(null)
+    }
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -90,9 +100,14 @@ export default function WorkplacesPage() {
         workplace.id === currentWorkplace.id ? currentWorkplace : workplace,
       )
       toast({
-        title: "Workplace updated",
-        description: "The workplace has been successfully updated.",
+        title: t.workplaceUpdated,
+        description: "Ο χώρος εργασίας ενημερώθηκε με επιτυχία.",
       })
+
+      // Update selected workplace if it's the one being edited
+      if (selectedWorkplace && selectedWorkplace.id === currentWorkplace.id) {
+        setSelectedWorkplace(currentWorkplace)
+      }
     } else {
       const newWorkplace = {
         ...currentWorkplace,
@@ -100,8 +115,8 @@ export default function WorkplacesPage() {
       }
       updatedWorkplaces = [...workplaces, newWorkplace]
       toast({
-        title: "Workplace added",
-        description: "The workplace has been successfully added.",
+        title: t.workplaceAdded,
+        description: "Ο χώρος εργασίας προστέθηκε με επιτυχία.",
       })
     }
 
@@ -113,21 +128,114 @@ export default function WorkplacesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Workplaces</h1>
-        <p className="text-muted-foreground">Manage your office locations and work sites.</p>
+        <h1 className="text-3xl font-bold tracking-tight">{t.workplacesTitle}</h1>
+        <p className="text-muted-foreground">{t.manageOffices}</p>
       </div>
 
-      <DataTable columns={columns} data={workplaces} onAdd={handleAddNew} onEdit={handleEdit} onDelete={handleDelete} />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-2">
+          <DataTable
+            columns={columns}
+            data={workplaces}
+            onAdd={handleAddNew}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onSelect={setSelectedWorkplace}
+          />
+        </div>
+
+        <div>
+          {selectedWorkplace ? (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle>{selectedWorkplace.name}</CardTitle>
+                    <CardDescription>{t.workplaceDetails}</CardDescription>
+                  </div>
+                  <Badge variant="outline" className="ml-2">
+                    <Building2 className="h-3 w-3 mr-1" />
+                    {selectedWorkplace.capacity}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">{t.address}</h3>
+                  <div className="flex items-start text-sm">
+                    <MapPin className="h-4 w-4 mr-2 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p>{selectedWorkplace.address}</p>
+                      <p>
+                        {selectedWorkplace.city}, {selectedWorkplace.state} {selectedWorkplace.zipCode}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">{t.capacity}</h3>
+                  <div className="flex items-center text-sm">
+                    <Users className="h-4 w-4 mr-2 text-muted-foreground" />
+                    {selectedWorkplace.capacity}
+                  </div>
+                </div>
+
+                {selectedWorkplace.notes && (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium">{t.notes}</h3>
+                    <div className="flex items-start text-sm">
+                      <FileText className="h-4 w-4 mr-2 text-muted-foreground mt-0.5" />
+                      <span>{selectedWorkplace.notes}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex space-x-2 pt-4">
+                  <Button variant="outline" size="sm" onClick={() => handleEdit(selectedWorkplace)} className="flex-1">
+                    {t.edit}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      if (confirm(t.confirmDelete)) {
+                        handleDelete(selectedWorkplace.id)
+                      }
+                    }}
+                    className="flex-1"
+                  >
+                    {t.delete}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>{t.noWorkplaceSelected}</CardTitle>
+                <CardDescription>{t.selectWorkplace}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">{t.selectWorkplace}</p>
+                <Button onClick={handleAddNew} className="mt-4 w-full">
+                  {t.addNewWorkplace}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>{isEditing ? "Edit Workplace" : "Add New Workplace"}</DialogTitle>
+            <DialogTitle>{isEditing ? t.editWorkplace : t.addNewWorkplace}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Name *</Label>
+                <Label htmlFor="name">{t.workplaceName} *</Label>
                 <Input
                   id="name"
                   value={currentWorkplace.name}
@@ -136,7 +244,7 @@ export default function WorkplacesPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="address">Address *</Label>
+                <Label htmlFor="address">{t.address} *</Label>
                 <Input
                   id="address"
                   value={currentWorkplace.address}
@@ -146,7 +254,7 @@ export default function WorkplacesPage() {
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="city">City</Label>
+                  <Label htmlFor="city">{t.city}</Label>
                   <Input
                     id="city"
                     value={currentWorkplace.city}
@@ -154,7 +262,7 @@ export default function WorkplacesPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="state">State</Label>
+                  <Label htmlFor="state">{t.state}</Label>
                   <Input
                     id="state"
                     value={currentWorkplace.state}
@@ -162,7 +270,7 @@ export default function WorkplacesPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="zipCode">Zip Code</Label>
+                  <Label htmlFor="zipCode">{t.zipCode}</Label>
                   <Input
                     id="zipCode"
                     value={currentWorkplace.zipCode}
@@ -171,7 +279,7 @@ export default function WorkplacesPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="capacity">Capacity</Label>
+                <Label htmlFor="capacity">{t.capacity}</Label>
                 <Input
                   id="capacity"
                   value={currentWorkplace.capacity}
@@ -180,7 +288,7 @@ export default function WorkplacesPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
+                <Label htmlFor="notes">{t.notes}</Label>
                 <Textarea
                   id="notes"
                   value={currentWorkplace.notes}
@@ -191,9 +299,9 @@ export default function WorkplacesPage() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancel
+                {t.cancel}
               </Button>
-              <Button type="submit">{isEditing ? "Update" : "Add"}</Button>
+              <Button type="submit">{isEditing ? t.update : t.add}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

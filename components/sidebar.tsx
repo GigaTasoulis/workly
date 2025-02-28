@@ -6,6 +6,7 @@ import { Building2, Users, Briefcase, ShoppingBag, LayoutDashboard, Menu, X } fr
 import { Button } from "@/components/ui/button"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
+import { translations as t } from "@/lib/translations"
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -13,27 +14,27 @@ export function Sidebar() {
 
   const routes = [
     {
-      name: "Dashboard",
+      name: t.dashboard,
       path: "/",
       icon: <LayoutDashboard className="h-5 w-5" />,
     },
     {
-      name: "Suppliers",
+      name: t.suppliers,
       path: "/suppliers",
       icon: <ShoppingBag className="h-5 w-5" />,
     },
     {
-      name: "Workplaces",
+      name: t.workplaces,
       path: "/workplaces",
       icon: <Building2 className="h-5 w-5" />,
     },
     {
-      name: "Customers",
+      name: t.customers,
       path: "/customers",
       icon: <Users className="h-5 w-5" />,
     },
     {
-      name: "Employees",
+      name: t.employees,
       path: "/employees",
       icon: <Briefcase className="h-5 w-5" />,
     },

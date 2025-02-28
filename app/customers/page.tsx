@@ -12,10 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/components/ui/use-toast"
 import { generateId, getLocalData, setLocalData } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Mail, Phone, Building2, Briefcase, DollarSign, Calendar, FileText } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { format } from "date-fns"
+import { translations as t } from "@/lib/translations"
 
 interface Customer {
   id: string
@@ -78,10 +79,10 @@ export default function CustomersPage() {
   }, [])
 
   const columns = [
-    { key: "name", label: "Name" },
-    { key: "contactPerson", label: "Contact Person" },
-    { key: "email", label: "Email" },
-    { key: "industry", label: "Industry" },
+    { key: "name", label: t.customerName },
+    { key: "contactPerson", label: t.contactPerson },
+    { key: "email", label: t.email },
+    { key: "industry", label: t.industry },
   ]
 
   const handleAddNew = () => {
@@ -206,13 +207,13 @@ export default function CustomersPage() {
     <TabsContent value="transactions" className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-sm font-medium">Transaction History</h3>
+          <h3 className="text-sm font-medium">{t.transactionHistory}</h3>
           <p className="text-sm text-muted-foreground">
-            Total spent: ${getTotalSpent(selectedCustomer?.id || "").toLocaleString()}
+            {t.totalSpent}: ${getTotalSpent(selectedCustomer?.id || "").toLocaleString()}
           </p>
         </div>
         <Button onClick={handleAddTransaction} size="sm">
-          Add Transaction
+          {t.addTransaction}
         </Button>
       </div>
       <div className="space-y-4">
@@ -256,8 +257,8 @@ export default function CustomersPage() {
       <CardContent>
         <Tabs defaultValue="details">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="details">Details</TabsTrigger>
-            <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            <TabsTrigger value="details">{t.details}</TabsTrigger>
+            <TabsTrigger value="transactions">{t.transactions}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="details" className="space-y-4 pt-4">
@@ -321,8 +322,8 @@ export default function CustomersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Customers</h1>
-        <p className="text-muted-foreground">Manage your customer relationships and data.</p>
+        <h1 className="text-3xl font-bold tracking-tight">{t.customers}</h1>
+        <p className="text-muted-foreground">{t.manageCustomers}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -343,8 +344,8 @@ export default function CustomersPage() {
           ) : (
             <Card>
               <CardHeader>
-                <CardTitle>No Customer Selected</CardTitle>
-                <CardDescription>Select a customer to view details</CardDescription>
+                <CardTitle>{t.noCustomerSelected}</CardTitle>
+                <CardDescription>{t.selectCustomer}</CardDescription>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
@@ -352,7 +353,7 @@ export default function CustomersPage() {
                   their transactions.
                 </p>
                 <Button onClick={handleAddNew} className="mt-4 w-full">
-                  Add New Customer
+                  {t.addNewCustomer}
                 </Button>
               </CardContent>
             </Card>
@@ -363,13 +364,13 @@ export default function CustomersPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>{isEditing ? "Edit Customer" : "Add New Customer"}</DialogTitle>
+            <DialogTitle>{isEditing ? t.editCustomer : t.addNewCustomer}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Name *</Label>
+                  <Label htmlFor="name">{t.customerName} *</Label>
                   <Input
                     id="name"
                     value={currentCustomer.name}
@@ -378,7 +379,7 @@ export default function CustomersPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="contactPerson">Contact Person</Label>
+                  <Label htmlFor="contactPerson">{t.contactPerson}</Label>
                   <Input
                     id="contactPerson"
                     value={currentCustomer.contactPerson}
@@ -388,7 +389,7 @@ export default function CustomersPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email *</Label>
+                  <Label htmlFor="email">{t.email} *</Label>
                   <Input
                     id="email"
                     type="email"
@@ -398,7 +399,7 @@ export default function CustomersPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
+                  <Label htmlFor="phone">{t.phone}</Label>
                   <Input
                     id="phone"
                     value={currentCustomer.phone}
@@ -407,7 +408,7 @@ export default function CustomersPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="address">Address</Label>
+                <Label htmlFor="address">{t.address}</Label>
                 <Input
                   id="address"
                   value={currentCustomer.address}
@@ -415,7 +416,7 @@ export default function CustomersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="industry">Industry</Label>
+                <Label htmlFor="industry">{t.industry}</Label>
                 <Input
                   id="industry"
                   value={currentCustomer.industry}
@@ -423,7 +424,7 @@ export default function CustomersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
+                <Label htmlFor="notes">{t.notes}</Label>
                 <Textarea
                   id="notes"
                   value={currentCustomer.notes}
@@ -446,12 +447,12 @@ export default function CustomersPage() {
       <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Add New Transaction</DialogTitle>
+            <DialogTitle>{t.addTransaction}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleTransactionSubmit}>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="productName">Product Name *</Label>
+                <Label htmlFor="productName">{t.productName} *</Label>
                 <Input
                   id="productName"
                   value={currentTransaction.productName}
@@ -461,7 +462,7 @@ export default function CustomersPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="amount">Amount *</Label>
+                  <Label htmlFor="amount">{t.amount} *</Label>
                   <Input
                     id="amount"
                     type="number"
@@ -475,7 +476,7 @@ export default function CustomersPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="date">Date</Label>
+                  <Label htmlFor="date">{t.date}</Label>
                   <Input
                     id="date"
                     type="date"
@@ -485,7 +486,7 @@ export default function CustomersPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
+                <Label htmlFor="status">{t.status}</Label>
                 <Select
                   value={currentTransaction.status}
                   onValueChange={(value: "paid" | "pending" | "cancelled") =>
@@ -496,14 +497,14 @@ export default function CustomersPage() {
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="paid">Paid</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    <SelectItem value="paid">{t.paid}</SelectItem>
+                    <SelectItem value="pending">{t.pending}</SelectItem>
+                    <SelectItem value="cancelled">{t.cancelled}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
+                <Label htmlFor="notes">{t.notes}</Label>
                 <Textarea
                   id="notes"
                   value={currentTransaction.notes}

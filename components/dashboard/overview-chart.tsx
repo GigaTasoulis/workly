@@ -19,7 +19,7 @@ export function OverviewChart() {
     },
     {
       name: t.months.feb,
-      revenue: 3000,
+      revenue: 3002,
       expenses: 1398,
     },
     {

@@ -13,6 +13,8 @@ export const translations = {
   status: "Κατάσταση",
   date: "Ημερομηνία",
   actions: "Ενέργειες",
+  selectSupplierDetails: "Επιλέξτε έναν προμηθευτή για να δείτε τα στοιχεία",
+  selectWorkplaceDetails: "Επιλέξτε έναν χώρο εργασίας για να δείτε τα στοιχεία",
 
   // Navigation
   dashboard: "Πίνακας Ελέγχου",

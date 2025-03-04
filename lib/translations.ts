@@ -193,7 +193,7 @@ export const translations = {
   legal: "Νομικό",
 
   // Employee Details Tabs
-  employmentDetails: "Στοιχεία Απασχόλησης",
+  employmentDetails: "Στοιχεία",
   performance: "Απόδοση",
   tenure: "Διάρκεια Απασχόλησης",
   certifications: "Πιστοποιήσεις",

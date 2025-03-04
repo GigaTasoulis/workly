@@ -34,6 +34,7 @@ interface Transaction {
   customerId: string
   productName: string
   amount: number
+  amountPaid: number
   date: string
   status: "paid" | "pending" | "cancelled"
   notes: string
@@ -55,6 +56,7 @@ const initialTransaction: Transaction = {
   customerId: "",
   productName: "",
   amount: 0,
+  amountPaid: 0,
   date: new Date().toISOString().split("T")[0],
   status: "pending",
   notes: "",
@@ -70,18 +72,24 @@ export default function CustomersPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const { toast } = useToast()
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
+  const [paymentAmount, setPaymentAmount] = useState<number>(0)
+  const [isTransactionEditing, setIsTransactionEditing] = useState(false);
+
+
 
   useEffect(() => {
-    const customersData = getLocalData("customers")
-    const transactionsData = getLocalData("transactions")
-    setCustomers(customersData)
-    setTransactions(transactionsData)
-  }, [])
+    const customersData = getLocalData("customers") || [];
+    const transactionsData = getLocalData("transactions") || [];
+    setCustomers(customersData);
+    setTransactions(transactionsData);
+  }, []);  
 
   const columns = [
     { key: "name", label: t.customerName },
     { key: "contactPerson", label: t.contactPerson },
     { key: "email", label: t.email },
+    { key: "debt", label: "Χρέη" },
     { key: "industry", label: t.industry },
   ]
 
@@ -90,6 +98,56 @@ export default function CustomersPage() {
     setIsEditing(false)
     setIsDialogOpen(true)
   }
+
+  const handlePaymentSubmit = () => {
+    // Calculate the remaining balance:
+    const remaining = Number(currentTransaction.amount) - Number(currentTransaction.amountPaid);
+    
+    // Validate the payment amount:
+    if (paymentAmount <= 0) {
+      toast({
+        title: "Error",
+        description: "Payment amount must be greater than zero.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (paymentAmount > remaining) {
+      toast({
+        title: "Error",
+        description: "Payment amount cannot exceed the remaining balance.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Update the transaction's amountPaid:
+    const updatedTransaction = { ...currentTransaction };
+    updatedTransaction.amountPaid += paymentAmount;
+    
+    // Automatically mark as paid if the transaction is fully settled:
+    if (updatedTransaction.amountPaid >= updatedTransaction.amount) {
+      updatedTransaction.status = "paid";
+    }
+    
+    // Update the transactions list and local storage:
+    const updatedTransactions = transactions.map((t) =>
+      t.id === updatedTransaction.id ? updatedTransaction : t
+    );
+    setTransactions(updatedTransactions);
+    setLocalData("transactions", updatedTransactions);
+    
+    toast({
+      title: "Payment successful",
+      description: "The payment has been recorded.",
+    });
+    
+    // Close the Payment Dialog and reset paymentAmount:
+    setIsPaymentDialogOpen(false);
+    setPaymentAmount(0);
+  };
+  
 
   const handleEdit = (customer: Customer) => {
     setCurrentCustomer(customer)
@@ -102,6 +160,43 @@ export default function CustomersPage() {
     setCustomers(updatedCustomers)
     setLocalData("customers", updatedCustomers)
   }
+
+  const handleDeleteTransaction = (transactionId: string) => {
+    if (confirm("Are you sure you want to delete this transaction?")) {
+      const updatedTransactions = transactions.filter((t) => t.id !== transactionId);
+      setTransactions(updatedTransactions);
+      setLocalData("transactions", updatedTransactions);
+      toast({
+        title: "Transaction Deleted",
+        description: "The transaction has been successfully deleted.",
+      });
+    }
+  };
+  
+
+  const getDebt = (customerId: string) => {
+    return transactions
+      .filter((t) => t.customerId === customerId && t.status === "pending")
+      .reduce((sum, t) => sum + (t.amount - (t.amountPaid || 0)), 0);
+  };
+  
+  const customersWithDebt = customers.map(customer => ({
+    ...customer,
+    debt: getDebt(customer.id),
+  }));
+
+  const handleEditTransaction = (transaction: Transaction) => {
+    setCurrentTransaction(transaction);
+    setIsTransactionEditing(true);
+    setIsTransactionDialogOpen(true);
+  };
+
+  const handleOpenPaymentDialog = (transaction: Transaction) => {
+    setCurrentTransaction(transaction);
+    setPaymentAmount(0); // Reset previous payment value
+    setIsPaymentDialogOpen(true);
+  };
+  
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -141,42 +236,59 @@ export default function CustomersPage() {
   }
 
   const handleAddTransaction = () => {
-    if (!selectedCustomer) return
+    if (!selectedCustomer) return;
     setCurrentTransaction({
       ...initialTransaction,
       customerId: selectedCustomer.id,
-    })
-    setIsTransactionDialogOpen(true)
-  }
+    });
+    setIsTransactionEditing(false); // Reset the editing flag for new transactions
+    setIsTransactionDialogOpen(true);
+  }  
 
   const handleTransactionSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-
+    e.preventDefault();
+  
     if (!currentTransaction.productName || !currentTransaction.amount) {
       toast({
-        title: "Error",
-        description: "Product name and amount are required fields.",
+        title: "Σφάλμα",
+        description: "Το όνομα του προϊόντος και το ποσό είναι υποχρεωτικά πεδία.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
-
-    const newTransaction = {
-      ...currentTransaction,
-      id: generateId(),
-      amount: Number(currentTransaction.amount),
+  
+    // Prepare the transaction object and update status if fully paid
+    const transactionToSave = { ...currentTransaction };
+    if (transactionToSave.amountPaid >= transactionToSave.amount) {
+      transactionToSave.status = "paid";
     }
-
-    const updatedTransactions = [...transactions, newTransaction]
-    setTransactions(updatedTransactions)
-    setLocalData("transactions", updatedTransactions)
-    setIsTransactionDialogOpen(false)
-
-    toast({
-      title: "Transaction added",
-      description: "The transaction has been successfully recorded.",
-    })
-  }
+  
+    if (isTransactionEditing) {
+      // Update the existing transaction
+      const updatedTransactions = transactions.map((t) =>
+        t.id === transactionToSave.id ? transactionToSave : t
+      );
+      setTransactions(updatedTransactions);
+      setLocalData("transactions", updatedTransactions);
+      toast({
+        title: "Η συναλλαγή ενημερώθηκε",
+        description: "Η συναλλαγή ενημερώθηκε επιτυχώς.",
+      });
+      setIsTransactionEditing(false);
+    } else {
+      // Create a new transaction
+      transactionToSave.id = generateId();
+      const updatedTransactions = [...transactions, transactionToSave];
+      setTransactions(updatedTransactions);
+      setLocalData("transactions", updatedTransactions);
+      toast({
+        title: "Η συναλλαγή προστέθηκε",
+        description: "Η συναλλαγή καταχωρήθηκε επιτυχώς.",
+      });
+    }
+    setIsTransactionDialogOpen(false);
+  };
+   
 
   const getCustomerTransactions = (customerId: string) => {
     return transactions
@@ -217,25 +329,42 @@ export default function CustomersPage() {
         </Button>
       </div>
       <div className="space-y-4">
-        {getCustomerTransactions(selectedCustomer?.id || "").map((transaction) => (
-          <div key={transaction.id} className="flex items-start gap-4 rounded-md border p-4">
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center justify-between">
-                <p className="font-medium">{transaction.productName}</p>
-                <Badge variant="outline" className={getStatusColor(transaction.status)}>
-                  {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                {format(new Date(transaction.date), "MMM d, yyyy")}
-                <span>•</span>
-                <DollarSign className="h-4 w-4" />${transaction.amount.toLocaleString()}
-              </div>
-              {transaction.notes && <p className="text-sm text-muted-foreground mt-2">{transaction.notes}</p>}
+      {getCustomerTransactions(selectedCustomer?.id || "").map((transaction) => (
+        <div key={transaction.id} className="flex items-start gap-4 rounded-md border p-4">
+          <div className="flex-1 space-y-1">
+            <div className="flex items-center justify-between">
+              <p className="font-medium">{transaction.productName}</p>
+              <Badge variant="outline" className={getStatusColor(transaction.status)}>
+                {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
+              </Badge>
             </div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Calendar className="h-4 w-4" />
+              {format(new Date(transaction.date), "MMM d, yyyy")}
+              <span>•</span>
+              <DollarSign className="h-4 w-4" />
+              ${ (Number(transaction.amount) || 0).toLocaleString() }
+            </div>
+            {transaction.notes && <p className="text-sm text-muted-foreground mt-2">{transaction.notes}</p>}
+            <p className="text-xs text-muted-foreground">
+              Paid: ${ (Number(transaction.amountPaid) || 0).toLocaleString() } / ${ (Number(transaction.amount) || 0).toLocaleString() }
+            </p>
           </div>
-        ))}
+          <div className="flex flex-col gap-2">
+            <Button size="sm" variant="outline" onClick={() => handleEditTransaction(transaction)}>
+              Edit
+            </Button>
+            {transaction.status === "pending" && transaction.amountPaid < transaction.amount && (
+              <Button size="sm" variant="secondary" onClick={() => handleOpenPaymentDialog(transaction)}>
+                Pay
+              </Button>
+            )}
+            <Button size="sm" variant="destructive" onClick={() => handleDeleteTransaction(transaction.id)}>
+              Delete
+            </Button>
+          </div>
+        </div>
+      ))}
       </div>
     </TabsContent>
   )
@@ -330,7 +459,7 @@ export default function CustomersPage() {
         <div className="md:col-span-2">
           <DataTable
             columns={columns}
-            data={customers}
+            data={customersWithDebt}
             onAdd={handleAddNew}
             onEdit={handleEdit}
             onDelete={handleDelete}
@@ -443,11 +572,66 @@ export default function CustomersPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Πληρωμή</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handlePaymentSubmit();
+            }}
+          >
+            <div className="grid gap-4 py-4">
+              <div>
+                <p>
+                  <strong>Προιόν:</strong> {currentTransaction.productName}
+                </p>
+                <p>
+                  <strong>Συνολικό ποσό:</strong>{" "}
+                  ${ (Number(currentTransaction.amount) || 0).toLocaleString() }
+                </p>
+                <p>
+                  <strong>Πληρωμένο ποσό:</strong>{" "}
+                  ${ (Number(currentTransaction.amountPaid) || 0).toLocaleString() }
+                </p>
+                <p>
+                  <strong>Υπόλοιπο:</strong>{" "}
+                  ${ (Number(currentTransaction.amount) - Number(currentTransaction.amountPaid) || 0).toLocaleString() }
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="paymentAmount">Ποσό πληρωμής</Label>
+                <Input
+                  id="paymentAmount"
+                  type="number"
+                  min="0"
+                  max={currentTransaction.amount - currentTransaction.amountPaid} // prevents overpayment in the UI
+                  step="0.01"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(Number.parseFloat(e.target.value) || 0)}
+                  required
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsPaymentDialogOpen(false)}>
+                Ακύρωση
+              </Button>
+              <Button type="submit">Πληρωμή</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Add Transaction Dialog */}
       <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>{t.addTransaction}</DialogTitle>
+            <DialogTitle>
+              {isTransactionEditing ? "Ενημέρωση Συναλλαγής" : t.addTransaction}
+            </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleTransactionSubmit}>
             <div className="grid gap-4 py-4">
@@ -456,7 +640,12 @@ export default function CustomersPage() {
                 <Input
                   id="productName"
                   value={currentTransaction.productName}
-                  onChange={(e) => setCurrentTransaction({ ...currentTransaction, productName: e.target.value })}
+                  onChange={(e) =>
+                    setCurrentTransaction({
+                      ...currentTransaction,
+                      productName: e.target.value,
+                    })
+                  }
                   required
                 />
               </div>
@@ -470,7 +659,10 @@ export default function CustomersPage() {
                     step="0.01"
                     value={currentTransaction.amount}
                     onChange={(e) =>
-                      setCurrentTransaction({ ...currentTransaction, amount: Number.parseFloat(e.target.value) })
+                      setCurrentTransaction({
+                        ...currentTransaction,
+                        amount: Number.parseFloat(e.target.value),
+                      })
                     }
                     required
                   />
@@ -481,9 +673,31 @@ export default function CustomersPage() {
                     id="date"
                     type="date"
                     value={currentTransaction.date}
-                    onChange={(e) => setCurrentTransaction({ ...currentTransaction, date: e.target.value })}
+                    onChange={(e) =>
+                      setCurrentTransaction({
+                        ...currentTransaction,
+                        date: e.target.value,
+                      })
+                    }
                   />
                 </div>
+              </div>
+              {/* New Partial Payment Input */}
+              <div className="space-y-2">
+                <Label htmlFor="amountPaid">Εξοφλημένο Ποσό</Label>
+                <Input
+                  id="amountPaid"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={currentTransaction.amountPaid}
+                  onChange={(e) =>
+                    setCurrentTransaction({
+                      ...currentTransaction,
+                      amountPaid: Number.parseFloat(e.target.value) || 0,
+                    })
+                  }
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="status">{t.status}</Label>
@@ -494,7 +708,7 @@ export default function CustomersPage() {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
+                    <SelectValue placeholder="Επιλέξτε κατάσταση" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="paid">{t.paid}</SelectItem>
@@ -508,20 +722,28 @@ export default function CustomersPage() {
                 <Textarea
                   id="notes"
                   value={currentTransaction.notes}
-                  onChange={(e) => setCurrentTransaction({ ...currentTransaction, notes: e.target.value })}
+                  onChange={(e) =>
+                    setCurrentTransaction({
+                      ...currentTransaction,
+                      notes: e.target.value,
+                    })
+                  }
                   rows={3}
                 />
               </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsTransactionDialogOpen(false)}>
-                Cancel
+                Ακύρωση
               </Button>
-              <Button type="submit">Add Transaction</Button>
+              <Button type="submit">
+                {isTransactionEditing ? "Αποθήκευση" : t.addTransaction}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
     </div>
   )
 }

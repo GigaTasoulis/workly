@@ -77,6 +77,8 @@ export default function CustomersPage() {
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState<number>(0)
   const [isTransactionEditing, setIsTransactionEditing] = useState(false);
+  const [transactionFilter, setTransactionFilter] = useState<"all" | "paid" | "pending">("all");
+
 
   useEffect(() => {
     const customersData = getLocalData("customers") || [];
@@ -294,10 +296,12 @@ export default function CustomersPage() {
    
 
   const getCustomerTransactions = (customerId: string) => {
-    return transactions
-      .filter((t) => t.customerId === customerId)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  }
+    let filtered = transactions.filter((t) => t.customerId === customerId);
+    if (transactionFilter !== "all") {
+      filtered = filtered.filter((t) => t.status === transactionFilter);
+    }
+    return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  };
 
   const getTotalSpent = (customerId: string) => {
     return transactions
@@ -327,50 +331,68 @@ export default function CustomersPage() {
             {t.totalSpent}: ${getTotalSpent(selectedCustomer?.id || "").toLocaleString()}
           </p>
         </div>
-        <Button onClick={handleAddTransaction} size="sm">
-          {t.addTransaction}
-        </Button>
+        <div className="flex items-center space-x-4">
+          {/* Filter for transactions */}
+          <Select
+            value={transactionFilter}
+            onValueChange={(value) =>
+              setTransactionFilter(value as "all" | "paid" | "pending")
+            }
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Φίλτρο" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Όλα</SelectItem>
+              <SelectItem value="paid">Εξοφλημένα</SelectItem>
+              <SelectItem value="pending">Εκκρεμή</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={handleAddTransaction} size="sm">
+            {t.addTransaction}
+          </Button>
+        </div>
       </div>
       <div className="space-y-4">
-      {getCustomerTransactions(selectedCustomer?.id || "").map((transaction) => (
-        <div key={transaction.id} className="flex items-start gap-4 rounded-md border p-4">
-          <div className="flex-1 space-y-1">
-            <div className="flex items-center justify-between">
-              <p className="font-medium">{transaction.productName}</p>
-              <Badge variant="outline" className={getStatusColor(transaction.status)}>
-                {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
-              </Badge>
+        {getCustomerTransactions(selectedCustomer?.id || "").map((transaction) => (
+          <div key={transaction.id} className="flex items-start gap-4 rounded-md border p-4">
+            <div className="flex-1 space-y-1">
+              <div className="flex items-center justify-between">
+                <p className="font-medium">{transaction.productName}</p>
+                <Badge variant="outline" className={getStatusColor(transaction.status)}>
+                  {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Calendar className="h-4 w-4" />
+                {format(new Date(transaction.date), "MMM d, yyyy")}
+                <span>•</span>
+                <DollarSign className="h-4 w-4" />
+                ${ (Number(transaction.amount) || 0).toLocaleString() }
+              </div>
+              {transaction.notes && <p className="text-sm text-muted-foreground mt-2">{transaction.notes}</p>}
+              <p className="text-xs text-muted-foreground">
+                Εξοφλημένο: €{ (Number(transaction.amountPaid) || 0).toLocaleString() } / ${ (Number(transaction.amount) || 0).toLocaleString() }
+              </p>
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Calendar className="h-4 w-4" />
-              {format(new Date(transaction.date), "MMM d, yyyy")}
-              <span>•</span>
-              <DollarSign className="h-4 w-4" />
-              ${ (Number(transaction.amount) || 0).toLocaleString() }
-            </div>
-            {transaction.notes && <p className="text-sm text-muted-foreground mt-2">{transaction.notes}</p>}
-            <p className="text-xs text-muted-foreground">
-              Εξοφλημένο: €{ (Number(transaction.amountPaid) || 0).toLocaleString() } / ${ (Number(transaction.amount) || 0).toLocaleString() }
-            </p>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Button size="sm" variant="outline" onClick={() => handleEditTransaction(transaction)}>
-              Επεξεργασία
-            </Button>
-            {transaction.status === "pending" && transaction.amountPaid < transaction.amount && (
-              <Button size="sm" variant="secondary" onClick={() => handleOpenPaymentDialog(transaction)}>
-                Πληρωμή
+            <div className="flex flex-col gap-2">
+              <Button size="sm" variant="outline" onClick={() => handleEditTransaction(transaction)}>
+                Επεξεργασία
               </Button>
-            )}
-            <Button size="sm" variant="destructive" onClick={() => handleDeleteTransaction(transaction.id)}>
-              Διαγραφή
-            </Button>
+              {transaction.status === "pending" && transaction.amountPaid < transaction.amount && (
+                <Button size="sm" variant="secondary" onClick={() => handleOpenPaymentDialog(transaction)}>
+                  Πληρωμή
+                </Button>
+              )}
+              <Button size="sm" variant="destructive" onClick={() => handleDeleteTransaction(transaction.id)}>
+                Διαγραφή
+              </Button>
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
       </div>
     </TabsContent>
-  )
+  );
 
   const renderCustomerCard = () => (
     <Card>

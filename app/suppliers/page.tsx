@@ -27,6 +27,8 @@ interface Supplier {
   phone: string
   address: string
   notes: string
+  totalAmount: number
+  amountPaid: number
 }
 
 // New interface for supplier transactions
@@ -49,6 +51,8 @@ const initialSupplier: Supplier = {
   phone: "",
   address: "",
   notes: "",
+  totalAmount: 0,
+  amountPaid: 0,
 }
 
 // Initial supplier transaction – note the supplierId will be set when adding a transaction
@@ -95,6 +99,7 @@ export default function SuppliersPage() {
     { key: "contactPerson", label: "Υπεύθυνος Επαφής" },
     { key: "email", label: "Email" },
     { key: "phone", label: "Τηλέφωνο" },
+    { key: "debt", label: "Οφειλές" },
   ]
 
   const handleAddNew = () => {
@@ -309,7 +314,7 @@ export default function SuppliersPage() {
         <div>
           <h3 className="text-sm font-medium">Ιστορικό Συναλλαγών</h3>
           <p className="text-sm text-muted-foreground">
-            {t.totalSpent}: ${getTotalPaid(selectedSupplier?.id || "").toLocaleString()}
+            {t.totalSpent}: €{getTotalPaid(selectedSupplier?.id || "").toLocaleString()}
           </p>
         </div>
         <Button onClick={handleAddSupplierTransaction} size="sm">
@@ -335,11 +340,11 @@ export default function SuppliersPage() {
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>{transaction.date}</span>
                 <span>•</span>
-                <span>${(Number(transaction.amount) || 0).toLocaleString()}</span>
+                <span>€{(Number(transaction.amount) || 0).toLocaleString()}</span>
               </div>
               {transaction.notes && <p className="text-sm text-muted-foreground mt-2">{transaction.notes}</p>}
               <p className="text-xs text-muted-foreground">
-                Εξοφλημένο: ${ (Number(transaction.amountPaid) || 0).toLocaleString() } / ${ (Number(transaction.amount) || 0).toLocaleString() }
+                Εξοφλημένο: €{ (Number(transaction.amountPaid) || 0).toLocaleString() } / €{ (Number(transaction.amount) || 0).toLocaleString() }
               </p>
             </div>
             <div className="flex flex-col gap-2">
@@ -549,6 +554,14 @@ export default function SuppliersPage() {
                   rows={3}
                 />
               </div>
+              {/* Read-only computed debt, correlating with supplier transactions */}
+              <div className="space-y-2">
+                <Label>Οφειλές</Label>
+                <Input
+                  value={currentSupplier.id ? getDebt(currentSupplier.id).toFixed(2) : "0.00"}
+                  readOnly
+                />
+              </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
@@ -573,13 +586,13 @@ export default function SuppliersPage() {
                   <strong>Προϊόν:</strong> {currentSupplierTransaction.productName}
                 </p>
                 <p>
-                  <strong>Σύνολο:</strong> ${ (Number(currentSupplierTransaction.amount) || 0).toLocaleString() }
+                  <strong>Σύνολο:</strong> €{ (Number(currentSupplierTransaction.amount) || 0).toLocaleString() }
                 </p>
                 <p>
-                  <strong>Εξοφλημένο:</strong> ${ (Number(currentSupplierTransaction.amountPaid) || 0).toLocaleString() }
+                  <strong>Εξοφλημένο:</strong> €{ (Number(currentSupplierTransaction.amountPaid) || 0).toLocaleString() }
                 </p>
                 <p>
-                  <strong>Υπόλοιπο:</strong> ${ (Number(currentSupplierTransaction.amount) - Number(currentSupplierTransaction.amountPaid) || 0).toLocaleString() }
+                  <strong>Υπόλοιπο:</strong> €{ (Number(currentSupplierTransaction.amount) - Number(currentSupplierTransaction.amountPaid) || 0).toLocaleString() }
                 </p>
               </div>
               <div className="space-y-2">

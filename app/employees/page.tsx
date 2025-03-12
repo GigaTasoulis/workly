@@ -82,11 +82,11 @@ export default function EmployeesPage() {
   }, [])
 
   const columns = [
-    { key: "firstName", label: "First Name" },
-    { key: "lastName", label: "Last Name" },
+    { key: "firstName", label: "Όνομα" },
+    { key: "lastName", label: "Επώνυμο" },
     { key: "email", label: "Email" },
-    { key: "position", label: "Position" },
-    { key: "department", label: "Department" },
+    { key: "position", label: "Θέση" },
+    { key: "department", label: "Τμήμα" },
   ]
 
   const handleAddNew = () => {
@@ -278,7 +278,7 @@ export default function EmployeesPage() {
 
                   <TabsContent value="details" className="space-y-4 pt-4">
                     <div className="space-y-2">
-                      <h3 className="text-sm font-medium">Contact Information</h3>
+                      <h3 className="text-sm font-medium">Στοιχεία Επικοινωνίας</h3>
                       <div className="grid gap-2">
                         <div className="flex items-center text-sm">
                           <Mail className="h-4 w-4 mr-2 text-muted-foreground" />
@@ -292,7 +292,7 @@ export default function EmployeesPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <h3 className="text-sm font-medium">Workplace</h3>
+                      <h3 className="text-sm font-medium">Χώρος Εργασίας</h3>
                       <div className="flex items-center text-sm">
                         <Building2 className="h-4 w-4 mr-2 text-muted-foreground" />
                         {getWorkplaceName(selectedEmployee.workplaceId)}
@@ -301,7 +301,7 @@ export default function EmployeesPage() {
 
                     {selectedEmployee.notes && (
                       <div className="space-y-2">
-                        <h3 className="text-sm font-medium">Notes</h3>
+                        <h3 className="text-sm font-medium">Σημειώσεις</h3>
                         <div className="flex items-start text-sm">
                           <FileText className="h-4 w-4 mr-2 text-muted-foreground mt-0.5" />
                           <span>{selectedEmployee.notes}</span>
@@ -335,7 +335,7 @@ export default function EmployeesPage() {
 
                   <TabsContent value="employment" className="space-y-4 pt-4">
                     <div className="space-y-2">
-                      <h3 className="text-sm font-medium">Hire Date</h3>
+                      <h3 className="text-sm font-medium">Ημ/νία Πρόσληψης</h3>
                       <div className="flex items-center text-sm">
                         <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
                         {selectedEmployee.hireDate || "Not specified"}
@@ -343,7 +343,7 @@ export default function EmployeesPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <h3 className="text-sm font-medium">Tenure</h3>
+                      <h3 className="text-sm font-medium">Θητεία</h3>
                       <div className="flex items-center text-sm">
                         <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
                         {calculateTenure(selectedEmployee.hireDate)}
@@ -351,7 +351,7 @@ export default function EmployeesPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <h3 className="text-sm font-medium">Certifications</h3>
+                      <h3 className="text-sm font-medium">Πιστοποιήσεις</h3>
                       <div className="space-y-2">
                         {getCertifications(selectedEmployee.id).map((cert, index) => (
                           <div key={index} className="flex items-start gap-2 rounded-md border p-2">

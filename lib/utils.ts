@@ -10,25 +10,24 @@ export function generateId() {
 }
 
 // Local storage helpers
-export function getLocalData(key: string) {
-  if (typeof window === "undefined") return []
-
+export function getLocalData<T = any>(key: string): T | null {
+  if (typeof window === "undefined") return null;
   try {
-    const data = localStorage.getItem(key)
-    return data ? JSON.parse(data) : []
+    const data = localStorage.getItem(key);
+    return data ? JSON.parse(data) : null;
   } catch (error) {
-    console.error(`Error getting data for ${key}:`, error)
-    return []
+    console.error(`Error getting data for ${key}:`, error);
+    return null;
   }
 }
 
-export function setLocalData(key: string, data: any[]) {
-  if (typeof window === "undefined") return
-
+export function setLocalData(key: string, data: any): void {
+  if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(key, JSON.stringify(data))
+    localStorage.setItem(key, JSON.stringify(data));
   } catch (error) {
-    console.error(`Error saving data for ${key}:`, error)
+    console.error(`Error saving data for ${key}:`, error);
   }
 }
+
 

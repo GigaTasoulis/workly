@@ -1,15 +1,76 @@
 "use client"
 
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Building2, Users, Briefcase, ShoppingBag, DollarSign, Clock, BarChart } from "lucide-react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Building2, Users, Briefcase, ShoppingBag, DollarSign, Clock, BarChart, TrendingUp, TrendingDown, Minus } from "lucide-react"
 import { RecentActivity } from "@/components/dashboard/recent-activity"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { OverviewChart } from "@/components/dashboard/overview-chart"
 import { TopCustomers } from "@/components/dashboard/top-customers"
 import { translations as t } from "@/lib/translations"
+import { getLocalData } from "@/lib/utils"
 
 export default function Home() {
+  const [suppliersCount, setSuppliersCount] = useState(0)
+  const [workplacesCount, setWorkplacesCount] = useState(0)
+  const [customersCount, setCustomersCount] = useState(0)
+  const [employeesCount, setEmployeesCount] = useState(0)
+  const [totalRevenue, setTotalRevenue] = useState(0)
+  const [pendingTransactionsCount, setPendingTransactionsCount] = useState(0);
+  const [totalExpenses, setTotalExpenses] = useState(0);
+  const [mounted, setMounted] = useState(false);
+
+
+  // In your useEffect:
+  useEffect(() => {
+    const suppliers = getLocalData("suppliers") || [];
+    const workplaces = getLocalData("workplaces") || [];
+    const customers = getLocalData("customers") || [];
+    const employees = getLocalData("employees") || [];
+    const customerTransactions = getLocalData("transactions") || [];
+    const supplierTransactions = getLocalData("supplierTransactions") || [];
+  
+    setSuppliersCount(suppliers.length);
+    setWorkplacesCount(workplaces.length);
+    setCustomersCount(customers.length);
+    setEmployeesCount(employees.length);
+  
+    // Sum overall revenue from customer transactions
+    const revenue = customerTransactions.reduce(
+      (sum: number, tr: any) => sum + (tr.amountPaid || 0),
+      0
+    );
+    setTotalRevenue(revenue);
+  
+    // Count pending transactions for customers
+    const pendingCustomerCount = customerTransactions.filter(
+      (tr: any) => tr.status === "pending"
+    ).length;
+    // Count pending transactions for suppliers
+    const pendingSupplierCount = supplierTransactions.filter(
+      (tr: any) => tr.status === "pending"
+    ).length;
+    // Combine them:
+    setPendingTransactionsCount(pendingCustomerCount + pendingSupplierCount);
+  
+    // Calculate total expenses as remaining debt from supplier transactions
+    const expenses = supplierTransactions.reduce((sum: number, tr: any) => {
+      return sum + ((tr.amount || 0) - (tr.amountPaid || 0));
+    }, 0);
+    setTotalExpenses(expenses);
+  }, []);
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return null;
+  }
+
+
+  // Build modules dynamically using the computed counts
   const modules = [
     {
       title: t.suppliers,
@@ -18,7 +79,7 @@ export default function Home() {
       href: "/suppliers",
       color: "bg-blue-100 dark:bg-blue-900",
       textColor: "text-blue-700 dark:text-blue-300",
-      count: 24,
+      count: suppliersCount,
     },
     {
       title: t.workplaces,
@@ -27,7 +88,7 @@ export default function Home() {
       href: "/workplaces",
       color: "bg-green-100 dark:bg-green-900",
       textColor: "text-green-700 dark:text-green-300",
-      count: 8,
+      count: workplacesCount,
     },
     {
       title: t.customers,
@@ -36,7 +97,7 @@ export default function Home() {
       href: "/customers",
       color: "bg-purple-100 dark:bg-purple-900",
       textColor: "text-purple-700 dark:text-purple-300",
-      count: 156,
+      count: customersCount,
     },
     {
       title: t.employees,
@@ -45,40 +106,42 @@ export default function Home() {
       href: "/employees",
       color: "bg-amber-100 dark:bg-amber-900",
       textColor: "text-amber-700 dark:text-amber-300",
-      count: 42,
+      count: employeesCount,
     },
   ]
 
   const stats = [
     {
       title: t.totalRevenue,
-      value: "€45.231,89",
-      description: `12% ${t.moreLastMonth}`,
+      value: `€${totalRevenue.toLocaleString()}`,
+      description: `Overall paid: €${totalRevenue.toLocaleString()}`,
       icon: <DollarSign className="h-4 w-4 text-muted-foreground" />,
-      trend: "up",
+      trend: totalRevenue > 0 ? "up" : "neutral",
     },
     {
       title: t.newCustomers,
-      value: "12",
-      description: `3 ${t.moreThanLastWeek}`,
+      value: `${customersCount}`,
+      description: `3 ${t.moreThanLastWeek}`, // Adjust as needed
       icon: <Users className="h-4 w-4 text-muted-foreground" />,
       trend: "up",
     },
     {
-      title: t.activeProjects,
-      value: "24",
-      description: `2 ${t.completedThisWeek}`,
+      title: "Ενεργές συναλλαγές",
+      value: `${pendingTransactionsCount}`,
+      description: pendingTransactionsCount > 0 ? `${pendingTransactionsCount} pending` : "",
       icon: <BarChart className="h-4 w-4 text-muted-foreground" />,
       trend: "neutral",
     },
     {
-      title: t.avgResponseTime,
-      value: `3.2 ${t.hours}`,
-      description: `14% ${t.fasterThanLastMonth}`,
-      icon: <Clock className="h-4 w-4 text-muted-foreground" />,
-      trend: "up",
+      title: "Συνολικά Έξοδα",
+      value: `€${totalExpenses.toLocaleString()}`,
+      description: `Remaining debts: €${totalExpenses.toLocaleString()}`,
+      icon: <TrendingDown className="h-4 w-4 text-red-500" />,
+      trend: totalExpenses > 0 ? "down" : "neutral",
     },
-  ]
+  ];
+  
+    
 
   return (
     <div className="space-y-6">
@@ -194,4 +257,3 @@ export default function Home() {
     </div>
   )
 }
-

@@ -47,6 +47,7 @@ export const translations = {
   productName: "Όνομα Προϊόντος",
   amount: "Ποσό",
   details: "Λεπτομέρειες",
+  transactionPaid: "Συναλλαγή Ολοκληρώθηκε",
 
   // Transaction Status
   paid: "Πληρώθηκε",

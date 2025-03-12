@@ -10,10 +10,10 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
-import { generateId, getLocalData, setLocalData } from "@/lib/utils"
+import { generateId, getLocalData, setLocalData, logActivity } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Mail, Phone, Building2, Briefcase, DollarSign, Calendar, FileText } from "lucide-react"
+import { Mail, Phone, Building2, Briefcase, DollarSign, Calendar, FileText, Users } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { format } from "date-fns"
 import { translations as t } from "@/lib/translations"
@@ -151,6 +151,16 @@ export default function CustomersPage() {
     // Close the Payment Dialog and reset paymentAmount:
     setIsPaymentDialogOpen(false);
     setPaymentAmount(0);
+    logActivity({
+      type: "transaction",
+      action: t.transactionPaid, 
+      name: currentTransaction.productName,
+      time: "Just now",
+      iconKey: "euroSign", 
+      iconColor: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+    });    
+    
+    
   };
   
 
@@ -161,9 +171,20 @@ export default function CustomersPage() {
   }
 
   const handleDelete = (id: string) => {
+    const deletedName = selectedCustomer ? selectedCustomer.name : "";
     const updatedCustomers = customers.filter((customer) => customer.id !== id)
     setCustomers(updatedCustomers)
     setLocalData("customers", updatedCustomers)
+    logActivity({
+      type: "customer",
+      action: t.customerDeleted,
+      name: deletedName,
+      time: "Just now",
+      iconKey: "users",
+      iconColor: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+      avatar: "/placeholder.svg",
+    });
+    
   }
 
   const handleDeleteTransaction = (transactionId: string) => {
@@ -214,6 +235,29 @@ export default function CustomersPage() {
       })
       return
     }
+
+    if (!isEditing) {
+      logActivity({
+        type: "customer",
+        action: t.newCustomerAdded,
+        name: currentCustomer.name,
+        time: "Just now",
+        iconKey: "users", 
+        iconColor: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
+        avatar: "/placeholder.svg",
+      });      
+    } else {
+      logActivity({
+        type: "customer",
+        action: t.customerUpdated,
+        name: currentCustomer.name,
+        time: "Just now",
+        iconKey: "users",
+        iconColor: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+        avatar: "/placeholder.svg",
+      });
+    }
+    
 
     let updatedCustomers: Customer[]
 

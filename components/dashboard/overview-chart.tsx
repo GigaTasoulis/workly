@@ -3,76 +3,65 @@
 import { useEffect, useState } from "react"
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { translations as t } from "@/lib/translations"
+import { getLocalData } from "@/lib/utils"
+
+// Define interfaces matching your transactions (adjust if necessary)
+interface Transaction {
+  id: string;
+  customerId: string;
+  productName: string;
+  amount: number;
+  amountPaid: number;
+  date: string;
+  status: "paid" | "pending" | "cancelled";
+  notes: string;
+}
+
+interface SupplierTransaction {
+  id: string;
+  supplierId: string;
+  productName: string;
+  amount: number;
+  amountPaid: number;
+  date: string;
+  status: "paid" | "pending" | "cancelled";
+  notes: string;
+}
 
 export function OverviewChart() {
   const [mounted, setMounted] = useState(false)
+  const [chartData, setChartData] = useState<any[]>([])
 
   useEffect(() => {
     setMounted(true)
+    setChartData(computeDashboardData())
   }, [])
 
-  const data = [
-    {
-      name: t.months.jan,
-      revenue: 4000,
-      expenses: 2400,
-    },
-    {
-      name: t.months.feb,
-      revenue: 3002,
-      expenses: 1398,
-    },
-    {
-      name: t.months.mar,
-      revenue: 2000,
-      expenses: 1800,
-    },
-    {
-      name: t.months.apr,
-      revenue: 2780,
-      expenses: 3908,
-    },
-    {
-      name: t.months.may,
-      revenue: 1890,
-      expenses: 4800,
-    },
-    {
-      name: t.months.jun,
-      revenue: 2390,
-      expenses: 3800,
-    },
-    {
-      name: t.months.jul,
-      revenue: 3490,
-      expenses: 4300,
-    },
-    {
-      name: t.months.aug,
-      revenue: 4000,
-      expenses: 2400,
-    },
-    {
-      name: t.months.sep,
-      revenue: 5000,
-      expenses: 3398,
-    },
-    {
-      name: t.months.oct,
-      revenue: 6000,
-      expenses: 4800,
-    },
-    {
-      name: t.months.nov,
-      revenue: 7000,
-      expenses: 5800,
-    },
-    {
-      name: t.months.dec,
-      revenue: 9000,
-      expenses: 6800,
-    },
-  ]
+  // Aggregation function: sums customer revenue and supplier expenses by month
+  const computeDashboardData = () => {
+    const monthKeys = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+    const monthsData = monthKeys.map((key) => ({
+      name: t.months[key as keyof typeof t.months],
+      revenue: 0,
+      expenses: 0,
+    }))
+
+    // Get customer transactions from local storage
+    const customerTransactions: Transaction[] = getLocalData("transactions") || []
+    customerTransactions.forEach((tr) => {
+      const monthIndex = new Date(tr.date).getMonth()
+      monthsData[monthIndex].revenue += tr.amountPaid
+    })
+
+    // Get supplier transactions from local storage
+    const supplierTransactions: SupplierTransaction[] = getLocalData("supplierTransactions") || []
+    supplierTransactions.forEach((tr) => {
+      const monthIndex = new Date(tr.date).getMonth()
+      monthsData[monthIndex].expenses += tr.amountPaid
+    })
+
+    return monthsData
+  }
 
   if (!mounted) {
     return <div className="h-[300px] flex items-center justify-center">Loading chart...</div>
@@ -80,7 +69,7 @@ export function OverviewChart() {
 
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <BarChart data={data}>
+      <BarChart data={chartData}>
         <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
         <YAxis
           stroke="#888888"
@@ -89,14 +78,10 @@ export function OverviewChart() {
           axisLine={false}
           tickFormatter={(value) => `€${value}`}
         />
-        <Tooltip
-          formatter={(value) => [`€${value}`, ""]}
-          labelFormatter={(label) => `${t.months[label.toLowerCase()]}`}
-        />
+        <Tooltip formatter={(value) => [`€${value}`, ""]} labelFormatter={(label) => label} />
         <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name={t.revenue} />
         <Bar dataKey="expenses" fill="hsl(var(--muted))" radius={[4, 4, 0, 0]} name={t.expenses} />
       </BarChart>
     </ResponsiveContainer>
   )
 }
-

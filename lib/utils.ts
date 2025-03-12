@@ -30,4 +30,21 @@ export function setLocalData(key: string, data: any): void {
   }
 }
 
-
+export function logActivity(activity: {
+  type: string;
+  action: string;
+  name: string;
+  time: string;
+  iconKey: string; 
+  iconColor: string;
+  avatar?: string;
+}) {
+  const currentActivities = getLocalData("recentActivity") || [];
+  const newActivity = {
+    id: generateId(),
+    ...activity,
+  };
+  const updatedActivities = [newActivity, ...currentActivities];
+  setLocalData("recentActivity", updatedActivities);
+  window.dispatchEvent(new Event("recentActivityUpdated"));
+}

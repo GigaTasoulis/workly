@@ -82,6 +82,7 @@ export default function SuppliersPage() {
   const [isSupplierTransactionEditing, setIsSupplierTransactionEditing] = useState(false)
   const [isSupplierPaymentDialogOpen, setIsSupplierPaymentDialogOpen] = useState(false)
   const [supplierPaymentAmount, setSupplierPaymentAmount] = useState<number>(0)
+  const [supplierTransactionFilter, setSupplierTransactionFilter] = useState<"all" | "paid" | "pending">("all");
 
   useEffect(() => {
     // Initialize sample data if needed
@@ -164,12 +165,14 @@ export default function SuppliersPage() {
 
   // ------------- Supplier Transaction Logic --------------
 
-  // Helper: Get transactions for a specific supplier
   const getSupplierTransactions = (supplierId: string) => {
-    return supplierTransactions
-      .filter((t) => t.supplierId === supplierId)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  }
+    let filtered = supplierTransactions.filter((t) => t.supplierId === supplierId);
+    if (supplierTransactionFilter !== "all") {
+      filtered = filtered.filter((t) => t.status === supplierTransactionFilter);
+    }
+    return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  };  
+  
 
   // Helper: Compute total paid (or "spent") for a supplier (if needed)
   const getTotalPaid = (supplierId: string) => {
@@ -314,12 +317,29 @@ export default function SuppliersPage() {
         <div>
           <h3 className="text-sm font-medium">Ιστορικό Συναλλαγών</h3>
           <p className="text-sm text-muted-foreground">
-            {t.totalSpent}: €{getTotalPaid(selectedSupplier?.id || "").toLocaleString()}
+            {t.totalSpent}: ${getTotalPaid(selectedSupplier?.id || "").toLocaleString()}
           </p>
         </div>
-        <Button onClick={handleAddSupplierTransaction} size="sm">
-          {t.addTransaction}
-        </Button>
+        <div className="flex items-center space-x-4">
+          <Select
+            value={supplierTransactionFilter}
+            onValueChange={(value) =>
+              setSupplierTransactionFilter(value as "all" | "paid" | "pending")
+            }
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Φίλτρο" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Όλα</SelectItem>
+              <SelectItem value="paid">Εξοφλημένα</SelectItem>
+              <SelectItem value="pending">Εκκρεμή</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={handleAddSupplierTransaction} size="sm">
+            {t.addTransaction}
+          </Button>
+        </div>
       </div>
       <div className="space-y-4">
         {getSupplierTransactions(selectedSupplier?.id || "").map((transaction) => (
@@ -340,11 +360,11 @@ export default function SuppliersPage() {
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>{transaction.date}</span>
                 <span>•</span>
-                <span>€{(Number(transaction.amount) || 0).toLocaleString()}</span>
+                <span>${(Number(transaction.amount) || 0).toLocaleString()}</span>
               </div>
               {transaction.notes && <p className="text-sm text-muted-foreground mt-2">{transaction.notes}</p>}
               <p className="text-xs text-muted-foreground">
-                Εξοφλημένο: €{ (Number(transaction.amountPaid) || 0).toLocaleString() } / €{ (Number(transaction.amount) || 0).toLocaleString() }
+                Εξοφλημένο: ${ (Number(transaction.amountPaid) || 0).toLocaleString() } / ${ (Number(transaction.amount) || 0).toLocaleString() }
               </p>
             </div>
             <div className="flex flex-col gap-2">
@@ -353,18 +373,10 @@ export default function SuppliersPage() {
               </Button>
               {transaction.status === "pending" && transaction.amountPaid < transaction.amount && (
                 <>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => handleOpenSupplierPaymentDialog(transaction)}
-                  >
+                  <Button size="sm" variant="secondary" onClick={() => handleOpenSupplierPaymentDialog(transaction)}>
                     Πληρωμή
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => handleDeleteSupplierTransaction(transaction.id)}
-                  >
+                  <Button size="sm" variant="destructive" onClick={() => handleDeleteSupplierTransaction(transaction.id)}>
                     Διαγραφή
                   </Button>
                 </>
@@ -374,7 +386,7 @@ export default function SuppliersPage() {
         ))}
       </div>
     </div>
-  )
+  );  
 
   // Render supplier details with a tab for transactions
   const renderSupplierCard = () => (
@@ -435,7 +447,7 @@ export default function SuppliersPage() {
                   size="sm"
                   onClick={() => {
                     if (confirm("Είστε σίγουροι ότι θέλετε να διαγράψετε αυτόν τον προμηθευτή;")) {
-                      handleDelete(selectedSupplier.id)
+                      handleDelete(selectedSupplier?.id || '')
                     }
                   }}
                   className="flex-1"
@@ -467,7 +479,7 @@ export default function SuppliersPage() {
             onAdd={handleAddNew}
             onEdit={handleEdit}
             onDelete={handleDelete}
-            onSelect={setSelectedSupplier}
+            onSelect={(supplier: Supplier) => setSelectedSupplier(supplier)}
           />
         </div>
         <div>

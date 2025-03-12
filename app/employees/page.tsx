@@ -34,6 +34,14 @@ interface Employee {
   notes: string
 }
 
+interface Certification {
+  id: string
+  employeeId: string
+  name: string
+  issuer: string
+  date: string
+}
+
 const initialEmployee: Employee = {
   id: "",
   firstName: "",
@@ -67,6 +75,41 @@ export default function EmployeesPage() {
   const [currentEmployee, setCurrentEmployee] = useState<Employee>(initialEmployee)
   const [isEditing, setIsEditing] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
+  const [certifications, setCertifications] = useState<Certification[]>([]);
+  const [isCertificationDialogOpen, setIsCertificationDialogOpen] = useState(false);
+  const [currentCertification, setCurrentCertification] = useState<Certification>({
+    id: "",
+    employeeId: "",
+    name: "",
+    issuer: "",
+    date: "",
+  });
+  // New state for storing performance traits as simple text
+  const [performanceTraits, setPerformanceTraits] = useState<{
+    productivity: string;
+    attendance: string;
+    teamwork: string;
+    quality: string;
+  }>({
+    productivity: "Excellent",
+    attendance: "Very Good",
+    teamwork: "Good",
+    quality: "Average",
+  });
+
+  // State for controlling the performance trait edit modal
+  const [isPerformanceDialogOpen, setIsPerformanceDialogOpen] = useState(false);
+
+  // State for editing traits (used in the modal)
+  const [editingPerformanceTraits, setEditingPerformanceTraits] = useState({
+    productivity: "Excellent",
+    attendance: "Very Good",
+    teamwork: "Good",
+    quality: "Average",
+  });
+
+  
+  const [isEditingCertification, setIsEditingCertification] = useState(false);
   const { toast } = useToast()
 
   useEffect(() => {
@@ -81,6 +124,34 @@ export default function EmployeesPage() {
     setWorkplaces(workplacesData)
   }, [])
 
+  useEffect(() => {
+    const certs = getLocalData("certifications") || [];
+    setCertifications(certs);
+  }, []);
+
+  useEffect(() => {
+    if (selectedEmployee) {
+      const storageKey = `performanceTraits_${selectedEmployee.id}`;
+      const stored = getLocalData(storageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setPerformanceTraits(parsed);
+        setEditingPerformanceTraits(parsed);
+      } else {
+        const defaultTraits = {
+          productivity: "Excellent",
+          attendance: "Very Good",
+          teamwork: "Good",
+          quality: "Average",
+        };
+        setPerformanceTraits(defaultTraits);
+        setEditingPerformanceTraits(defaultTraits);
+        setLocalData(storageKey, JSON.stringify(defaultTraits));
+      }
+    }
+  }, [selectedEmployee]);
+  
+  
   const columns = [
     { key: "firstName", label: "Όνομα" },
     { key: "lastName", label: "Επώνυμο" },
@@ -111,6 +182,66 @@ export default function EmployeesPage() {
       setSelectedEmployee(null)
     }
   }
+
+  const handleAddCertification = () => {
+    if (!selectedEmployee) {
+      toast({
+        title: "Error",
+        description: "No employee is selected. Please select an employee first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setCurrentCertification({
+      id: "",
+      employeeId: selectedEmployee.id,
+      name: "",
+      issuer: "",
+      date: "",
+    });
+    setIsEditingCertification(false);
+    setIsCertificationDialogOpen(true);
+  };
+  
+  
+  const handleEditCertification = (cert: Certification) => {
+    setCurrentCertification(cert);
+    setIsEditingCertification(true);
+    setIsCertificationDialogOpen(true);
+  };
+  
+  const handleDeleteCertification = (id: string) => {
+    if (confirm("Are you sure you want to delete this certification?")) {
+      const updatedCerts = certifications.filter((c) => c.id !== id);
+      setCertifications(updatedCerts);
+      setLocalData("certifications", updatedCerts);
+    }
+  };
+  
+  const handleCertificationSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentCertification.name || !currentCertification.issuer || !currentCertification.date) {
+      toast({
+        title: "Error",
+        description: "All certification fields are required.",
+        variant: "destructive",
+      });
+      return;
+    }
+    let updatedCerts: Certification[];
+    if (isEditingCertification) {
+      updatedCerts = certifications.map((c) => (c.id === currentCertification.id ? currentCertification : c));
+      toast({ title: "Certification updated", description: "Certification updated successfully." });
+    } else {
+      const newCert = { ...currentCertification, id: generateId() };
+      updatedCerts = [...certifications, newCert];
+      toast({ title: "Certification added", description: "Certification added successfully." });
+    }
+    setCertifications(updatedCerts);
+    setLocalData("certifications", updatedCerts);
+    setIsCertificationDialogOpen(false);
+  };
+  
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -181,48 +312,28 @@ export default function EmployeesPage() {
     return `${yearDiff} ${t.years}, ${monthDiff} ${t.months}`
   }
 
-  // Generate mock performance metrics
-  const getPerformanceMetrics = (id: string) => {
-    // Use employee ID to generate consistent random values
-    const seed = id.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
 
-    return {
-      productivity: (seed % 30) + 70, // 70-100
-      attendance: (seed % 20) + 80, // 80-100
-      teamwork: (seed % 25) + 75, // 75-100
-      quality: (seed % 25) + 75, // 75-100
-    }
-  }
+  const mapMetricToTrait = (value: number) => {
+    if (value >= 90) return "Excellent";
+    if (value >= 80) return "Very Good";
+    if (value >= 70) return "Good";
+    return "Average";
+  };
+  
 
-  // Generate mock certifications
-  const getCertifications = (id: string) => {
-    const seed = id.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
-    const certifications = [
-      {
-        name: "Project Management Professional (PMP)",
-        issuer: "Project Management Institute",
-        date: "2022-05-15",
-      },
-      {
-        name: "Certified Scrum Master",
-        issuer: "Scrum Alliance",
-        date: "2021-08-22",
-      },
-      {
-        name: "Six Sigma Green Belt",
-        issuer: "ASQ",
-        date: "2023-01-10",
-      },
-      {
-        name: "ITIL Foundation",
-        issuer: "Axelos",
-        date: "2022-11-30",
-      },
-    ]
-
-    // Return 1-3 certifications based on the seed
-    return certifications.slice(0, (seed % 3) + 1)
-  }
+  const getCertifications = (employeeId: string): Certification[] => {
+    const storedCerts = getLocalData("certifications") || [];
+    return storedCerts
+      .filter((cert: any) => cert.employeeId === employeeId || true)
+      .map((cert: any, index: number) => ({
+        id: cert.id || `cert-${index}`,
+        employeeId: cert.employeeId || employeeId,
+        name: cert.name,
+        issuer: cert.issuer,
+        date: cert.date,
+      }));
+  };
+  
 
   return (
     <div className="space-y-6">
@@ -351,15 +462,28 @@ export default function EmployeesPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <h3 className="text-sm font-medium">Πιστοποιήσεις</h3>
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-sm font-medium">Πιστοποιήσεις</h3>
+                        <Button onClick={handleAddCertification} size="sm">
+                          Προσθήκη
+                        </Button>
+                      </div>
                       <div className="space-y-2">
-                        {getCertifications(selectedEmployee.id).map((cert, index) => (
-                          <div key={index} className="flex items-start gap-2 rounded-md border p-2">
+                        {getCertifications(selectedEmployee.id).map((cert) => (
+                          <div key={cert.id} className="flex items-start gap-2 rounded-md border p-2">
                             <GraduationCap className="h-4 w-4 text-muted-foreground mt-0.5" />
-                            <div>
+                            <div className="flex-1">
                               <p className="text-sm font-medium">{cert.name}</p>
                               <p className="text-xs text-muted-foreground">{cert.issuer}</p>
                               <p className="text-xs text-muted-foreground">Issued: {cert.date}</p>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <Button size="sm" variant="outline" onClick={() => handleEditCertification(cert)}>
+                                Επεξεργασία
+                              </Button>
+                              <Button size="sm" variant="destructive" onClick={() => handleDeleteCertification(cert.id)}>
+                                Διαγραφή
+                              </Button>
                             </div>
                           </div>
                         ))}
@@ -368,35 +492,29 @@ export default function EmployeesPage() {
                   </TabsContent>
 
                   <TabsContent value="performance" className="space-y-4 pt-4">
-                    <div className="space-y-4">
-                      {Object.entries(getPerformanceMetrics(selectedEmployee.id)).map(([key, value]) => (
-                        <div key={key} className="space-y-2">
-                          <div className="flex justify-between">
+                    {selectedEmployee ? (
+                      <div className="space-y-4">
+                        {Object.entries(performanceTraits).map(([key, trait]) => (
+                          <div key={key} className="flex justify-between">
                             <h3 className="text-sm font-medium">
                               {key === "productivity" && t.productivity}
                               {key === "attendance" && t.attendance}
                               {key === "teamwork" && t.teamwork}
                               {key === "quality" && t.quality}
                             </h3>
-                            <span className="text-sm text-muted-foreground">{value}%</span>
+                            <span className="text-sm text-muted-foreground">{trait}</span>
                           </div>
-                          <Progress value={value} className="h-2" />
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="mt-6 space-y-2">
-                      <h3 className="text-sm font-medium">{t.recentAchievements}</h3>
-                      <div className="space-y-2">
-                        <div className="flex items-start gap-2 rounded-md border p-2">
-                          <Award className="h-4 w-4 text-muted-foreground mt-0.5" />
-                          <div>
-                            <p className="text-sm font-medium">{t.employeeOfTheMonth}</p>
-                            <p className="text-xs text-muted-foreground">{t.outstandingPerformance}</p>
-                          </div>
-                        </div>
+                        ))}
+                        <Button onClick={() => { 
+                          console.log("Editing traits clicked");
+                          setIsPerformanceDialogOpen(true);
+                        }} size="sm">
+                          Επεξεργασία
+                        </Button>
                       </div>
-                    </div>
+                    ) : (
+                      <p>No performance metrics available.</p>
+                    )}
                   </TabsContent>
                 </Tabs>
               </CardContent>
@@ -537,6 +655,139 @@ export default function EmployeesPage() {
                 {t.cancel}
               </Button>
               <Button type="submit">{isEditing ? t.update : t.add}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isPerformanceDialogOpen} onOpenChange={setIsPerformanceDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Επεξεργασία Αποδόσεων</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              // Save the edited traits
+              setPerformanceTraits(editingPerformanceTraits);
+              if (selectedEmployee) {
+                setLocalData(`performanceTraits_${selectedEmployee.id}`, editingPerformanceTraits);
+              }
+              setIsPerformanceDialogOpen(false);
+            }}
+          >
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="prod">Productivity</Label>
+                <Input
+                  id="prod"
+                  value={editingPerformanceTraits.productivity}
+                  onChange={(e) =>
+                    setEditingPerformanceTraits({
+                      ...editingPerformanceTraits,
+                      productivity: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="att">Attendance</Label>
+                <Input
+                  id="att"
+                  value={editingPerformanceTraits.attendance}
+                  onChange={(e) =>
+                    setEditingPerformanceTraits({
+                      ...editingPerformanceTraits,
+                      attendance: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="team">Teamwork</Label>
+                <Input
+                  id="team"
+                  value={editingPerformanceTraits.teamwork}
+                  onChange={(e) =>
+                    setEditingPerformanceTraits({
+                      ...editingPerformanceTraits,
+                      teamwork: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="qual">Quality</Label>
+                <Input
+                  id="qual"
+                  value={editingPerformanceTraits.quality}
+                  onChange={(e) =>
+                    setEditingPerformanceTraits({
+                      ...editingPerformanceTraits,
+                      quality: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsPerformanceDialogOpen(false)}>
+                Ακύρωση
+              </Button>
+              <Button type="submit">Αποθήκευση</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isCertificationDialogOpen} onOpenChange={setIsCertificationDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>
+              {isEditingCertification ? "Επεξεργασία Πιστοποίησης" : "Προσθήκη Πιστοποίησης"}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCertificationSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="certName">Όνομα Πιστοποίησης *</Label>
+                <Input
+                  id="certName"
+                  value={currentCertification.name}
+                  onChange={(e) =>
+                    setCurrentCertification({ ...currentCertification, name: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="certIssuer">Εκδότη</Label>
+                <Input
+                  id="certIssuer"
+                  value={currentCertification.issuer}
+                  onChange={(e) =>
+                    setCurrentCertification({ ...currentCertification, issuer: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="certDate">Ημερομηνία *</Label>
+                <Input
+                  id="certDate"
+                  type="date"
+                  value={currentCertification.date}
+                  onChange={(e) =>
+                    setCurrentCertification({ ...currentCertification, date: e.target.value })
+                  }
+                  required
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsCertificationDialogOpen(false)}>
+                Ακύρωση
+              </Button>
+              <Button type="submit">{isEditingCertification ? "Αποθήκευση" : "Προσθήκη"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

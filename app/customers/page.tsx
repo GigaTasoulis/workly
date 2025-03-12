@@ -25,7 +25,8 @@ interface Customer {
   email: string
   phone: string
   address: string
-  industry: string
+  afm: string
+  tractor: string
   notes: string
 }
 
@@ -47,7 +48,8 @@ const initialCustomer: Customer = {
   email: "",
   phone: "",
   address: "",
-  industry: "",
+  afm: "",
+  tractor: "",
   notes: "",
 }
 
@@ -76,21 +78,22 @@ export default function CustomersPage() {
   const [paymentAmount, setPaymentAmount] = useState<number>(0)
   const [isTransactionEditing, setIsTransactionEditing] = useState(false);
 
-
-
   useEffect(() => {
     const customersData = getLocalData("customers") || [];
     const transactionsData = getLocalData("transactions") || [];
     setCustomers(customersData);
     setTransactions(transactionsData);
-  }, []);  
+  }, []);
 
   const columns = [
     { key: "name", label: t.customerName },
     { key: "contactPerson", label: t.contactPerson },
     { key: "email", label: t.email },
+    { key: "address", label: t.address },
+    { key: "phone", label: t.phone },
+    { key: "afm", label: "AFM" },
+    { key: "tractor", label: "Tractor" },
     { key: "debt", label: "Χρέη" },
-    { key: "industry", label: t.industry },
   ]
 
   const handleAddNew = () => {
@@ -377,10 +380,6 @@ export default function CustomersPage() {
             <CardTitle>{selectedCustomer?.name}</CardTitle>
             <CardDescription>Customer Details</CardDescription>
           </div>
-          <Badge variant="outline" className="ml-2">
-            <Briefcase className="h-3 w-3 mr-1" />
-            {selectedCustomer?.industry}
-          </Badge>
         </div>
       </CardHeader>
       <CardContent>
@@ -412,6 +411,22 @@ export default function CustomersPage() {
                 {selectedCustomer?.address || "Not provided"}
               </div>
             </div>
+
+            {(selectedCustomer?.afm || selectedCustomer?.tractor) && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium">Additional Information</h3>
+                {selectedCustomer?.afm && (
+                  <p className="text-sm text-muted-foreground">
+                    <strong>ΑΦΜ:</strong> {selectedCustomer.afm}
+                  </p>
+                )}
+                {selectedCustomer?.tractor && (
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Tractor:</strong> {selectedCustomer.tractor}
+                  </p>
+                )}
+              </div>
+            )}
 
             {selectedCustomer?.notes && (
               <div className="space-y-2">
@@ -544,13 +559,23 @@ export default function CustomersPage() {
                   onChange={(e) => setCurrentCustomer({ ...currentCustomer, address: e.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="industry">{t.industry}</Label>
-                <Input
-                  id="industry"
-                  value={currentCustomer.industry}
-                  onChange={(e) => setCurrentCustomer({ ...currentCustomer, industry: e.target.value })}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="afm">ΑΦΜ</Label>
+                  <Input
+                    id="afm"
+                    value={currentCustomer.afm}
+                    onChange={(e) => setCurrentCustomer({ ...currentCustomer, afm: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tractor">Τρακτέρ</Label>
+                  <Input
+                    id="tractor"
+                    value={currentCustomer.tractor}
+                    onChange={(e) => setCurrentCustomer({ ...currentCustomer, tractor: e.target.value })}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="notes">{t.notes}</Label>
@@ -607,7 +632,7 @@ export default function CustomersPage() {
                   id="paymentAmount"
                   type="number"
                   min="0"
-                  max={currentTransaction.amount - currentTransaction.amountPaid} // prevents overpayment in the UI
+                  max={currentTransaction.amount - currentTransaction.amountPaid}
                   step="0.01"
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(Number.parseFloat(e.target.value) || 0)}
@@ -747,4 +772,3 @@ export default function CustomersPage() {
     </div>
   )
 }
-

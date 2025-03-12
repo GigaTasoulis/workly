@@ -350,20 +350,20 @@ export default function CustomersPage() {
             </div>
             {transaction.notes && <p className="text-sm text-muted-foreground mt-2">{transaction.notes}</p>}
             <p className="text-xs text-muted-foreground">
-              Paid: ${ (Number(transaction.amountPaid) || 0).toLocaleString() } / ${ (Number(transaction.amount) || 0).toLocaleString() }
+              Εξοφλημένο: €{ (Number(transaction.amountPaid) || 0).toLocaleString() } / ${ (Number(transaction.amount) || 0).toLocaleString() }
             </p>
           </div>
           <div className="flex flex-col gap-2">
             <Button size="sm" variant="outline" onClick={() => handleEditTransaction(transaction)}>
-              Edit
+              Επεξεργασία
             </Button>
             {transaction.status === "pending" && transaction.amountPaid < transaction.amount && (
               <Button size="sm" variant="secondary" onClick={() => handleOpenPaymentDialog(transaction)}>
-                Pay
+                Πληρωμή
               </Button>
             )}
             <Button size="sm" variant="destructive" onClick={() => handleDeleteTransaction(transaction.id)}>
-              Delete
+              Διαγραφή
             </Button>
           </div>
         </div>
@@ -615,15 +615,15 @@ export default function CustomersPage() {
                 </p>
                 <p>
                   <strong>Συνολικό ποσό:</strong>{" "}
-                  ${ (Number(currentTransaction.amount) || 0).toLocaleString() }
+                  €{ (Number(currentTransaction.amount) || 0).toLocaleString() }
                 </p>
                 <p>
                   <strong>Πληρωμένο ποσό:</strong>{" "}
-                  ${ (Number(currentTransaction.amountPaid) || 0).toLocaleString() }
+                  €{ (Number(currentTransaction.amountPaid) || 0).toLocaleString() }
                 </p>
                 <p>
                   <strong>Υπόλοιπο:</strong>{" "}
-                  ${ (Number(currentTransaction.amount) - Number(currentTransaction.amountPaid) || 0).toLocaleString() }
+                  €{ (Number(currentTransaction.amount) - Number(currentTransaction.amountPaid) || 0).toLocaleString() }
                 </p>
               </div>
               <div className="space-y-2">

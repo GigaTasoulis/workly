@@ -1,6 +1,7 @@
 {
   "name": "my-v0-project",
   "version": "0.1.0",
+  "main": "main.js",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -45,6 +46,7 @@
     "cmdk": "1.0.4",
     "date-fns": "^4.1.0",
     "embla-carousel-react": "8.5.1",
+    "express": "^4.21.2",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
     "next": "14.2.16",
@@ -65,6 +67,7 @@
     "@types/node": "^22",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "electron": "^35.0.2",
     "postcss": "^8",
     "tailwindcss": "^3.4.17",
     "typescript": "^5"

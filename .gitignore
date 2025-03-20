@@ -25,3 +25,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Next.js static export folder
+/out
+
+# Electron build output folder (electron-builder output)
+/dist

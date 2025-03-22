@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Mail, Phone, Building2, Briefcase, DollarSign, Calendar, FileText, Users } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TransactionList } from "@/components/TransactionList"
 import { format } from "date-fns"
 import { translations as t } from "@/lib/translations"
 
@@ -130,19 +131,16 @@ export default function CustomersPage() {
     // Update the transaction's amountPaid:
     const updatedTransaction = { ...currentTransaction };
     updatedTransaction.amountPaid += paymentAmount;
-    
-    // Automatically mark as paid if the transaction is fully settled:
     if (updatedTransaction.amountPaid >= updatedTransaction.amount) {
       updatedTransaction.status = "paid";
     }
     
-    // Update the transactions list and local storage:
     const updatedTransactions = transactions.map((t) =>
       t.id === updatedTransaction.id ? updatedTransaction : t
     );
     setTransactions(updatedTransactions);
     setLocalData("transactions", updatedTransactions);
-    
+
     toast({
       title: "Payment successful",
       description: "The payment has been recorded.",
@@ -349,9 +347,9 @@ export default function CustomersPage() {
 
   const getTotalSpent = (customerId: string) => {
     return transactions
-      .filter((t) => t.customerId === customerId && t.status === "paid")
-      .reduce((sum, t) => sum + t.amount, 0)
-  }
+      .filter((t) => t.customerId === customerId)
+      .reduce((sum, t) => sum + (Number(t.amountPaid) || 0), 0);
+  };  
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -372,69 +370,20 @@ export default function CustomersPage() {
         <div>
           <h3 className="text-sm font-medium">{t.transactionHistory}</h3>
           <p className="text-sm text-muted-foreground">
-            {t.totalSpent}: ${getTotalSpent(selectedCustomer?.id || "").toLocaleString()}
+            {t.totalSpent}: €{getTotalSpent(selectedCustomer?.id || "").toLocaleString()}
           </p>
         </div>
-        <div className="flex items-center space-x-4">
-          {/* Filter for transactions */}
-          <Select
-            value={transactionFilter}
-            onValueChange={(value) =>
-              setTransactionFilter(value as "all" | "paid" | "pending")
-            }
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Φίλτρο" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Όλα</SelectItem>
-              <SelectItem value="paid">Εξοφλημένα</SelectItem>
-              <SelectItem value="pending">Εκκρεμή</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button onClick={handleAddTransaction} size="sm">
-            {t.addTransaction}
-          </Button>
-        </div>
+        <Button onClick={handleAddTransaction} size="sm">
+          {t.addTransaction}
+        </Button>
       </div>
-      <div className="space-y-4">
-        {getCustomerTransactions(selectedCustomer?.id || "").map((transaction) => (
-          <div key={transaction.id} className="flex items-start gap-4 rounded-md border p-4">
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center justify-between">
-                <p className="font-medium">{transaction.productName}</p>
-                <Badge variant="outline" className={getStatusColor(transaction.status)}>
-                  {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                {format(new Date(transaction.date), "MMM d, yyyy")}
-                <span>•</span>
-                <DollarSign className="h-4 w-4" />
-                ${ (Number(transaction.amount) || 0).toLocaleString() }
-              </div>
-              {transaction.notes && <p className="text-sm text-muted-foreground mt-2">{transaction.notes}</p>}
-              <p className="text-xs text-muted-foreground">
-                Εξοφλημένο: €{ (Number(transaction.amountPaid) || 0).toLocaleString() } / ${ (Number(transaction.amount) || 0).toLocaleString() }
-              </p>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Button size="sm" variant="outline" onClick={() => handleEditTransaction(transaction)}>
-                Επεξεργασία
-              </Button>
-              {transaction.status === "pending" && transaction.amountPaid < transaction.amount && (
-                <Button size="sm" variant="secondary" onClick={() => handleOpenPaymentDialog(transaction)}>
-                  Πληρωμή
-                </Button>
-              )}
-              <Button size="sm" variant="destructive" onClick={() => handleDeleteTransaction(transaction.id)}>
-                Διαγραφή
-              </Button>
-            </div>
-          </div>
-        ))}
-      </div>
+      <TransactionList
+        transactions={getCustomerTransactions(selectedCustomer?.id || "")}
+        onEdit={handleEditTransaction}
+        onDelete={handleDeleteTransaction}
+        onPayment={handleOpenPaymentDialog}
+        getStatusColor={getStatusColor} 
+      />
     </TabsContent>
   );
 
@@ -444,7 +393,7 @@ export default function CustomersPage() {
         <div className="flex justify-between items-start">
           <div>
             <CardTitle>{selectedCustomer?.name}</CardTitle>
-            <CardDescription>Customer Details</CardDescription>
+            <CardDescription>Πληροφορίες Πελάτη</CardDescription>
           </div>
         </div>
       </CardHeader>
@@ -457,7 +406,7 @@ export default function CustomersPage() {
 
           <TabsContent value="details" className="space-y-4 pt-4">
             <div className="space-y-2">
-              <h3 className="text-sm font-medium">Contact Information</h3>
+              <h3 className="text-sm font-medium">Επικοινωνία</h3>
               <div className="grid gap-2">
                 <div className="flex items-center text-sm">
                   <Mail className="h-4 w-4 mr-2 text-muted-foreground" />
@@ -471,7 +420,7 @@ export default function CustomersPage() {
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-sm font-medium">Address</h3>
+              <h3 className="text-sm font-medium">Διεύθυνση</h3>
               <div className="flex items-center text-sm">
                 <Building2 className="h-4 w-4 mr-2 text-muted-foreground" />
                 {selectedCustomer?.address || "Not provided"}
@@ -480,7 +429,7 @@ export default function CustomersPage() {
 
             {(selectedCustomer?.afm || selectedCustomer?.tractor) && (
               <div className="space-y-2">
-                <h3 className="text-sm font-medium">Additional Information</h3>
+                <h3 className="text-sm font-medium">Περισσότερες πληροφορίες</h3>
                 {selectedCustomer?.afm && (
                   <p className="text-sm text-muted-foreground">
                     <strong>ΑΦΜ:</strong> {selectedCustomer.afm}
@@ -488,7 +437,7 @@ export default function CustomersPage() {
                 )}
                 {selectedCustomer?.tractor && (
                   <p className="text-sm text-muted-foreground">
-                    <strong>Tractor:</strong> {selectedCustomer.tractor}
+                    <strong>Τρακτέρ:</strong> {selectedCustomer.tractor}
                   </p>
                 )}
               </div>
@@ -496,7 +445,7 @@ export default function CustomersPage() {
 
             {selectedCustomer?.notes && (
               <div className="space-y-2">
-                <h3 className="text-sm font-medium">Notes</h3>
+                <h3 className="text-sm font-medium">Σημειώσεις</h3>
                 <div className="flex items-start text-sm">
                   <FileText className="h-4 w-4 mr-2 text-muted-foreground mt-0.5" />
                   <span>{selectedCustomer.notes}</span>

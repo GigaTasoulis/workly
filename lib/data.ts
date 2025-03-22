@@ -300,7 +300,7 @@ export const sampleTransactions = [
     productName: "Cloud Infrastructure",
     amount: 8000,
     date: "2024-02-15",
-    status: "pending",
+    status: "Εκκρεμή",
     notes: "Monthly service fee",
   },
   {

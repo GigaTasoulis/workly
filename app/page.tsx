@@ -114,7 +114,7 @@ export default function Home() {
     {
       title: t.totalRevenue,
       value: `€${totalRevenue.toLocaleString()}`,
-      description: `Overall paid: €${totalRevenue.toLocaleString()}`,
+      description: `Συνολικά πληρώθηκαν: €${totalRevenue.toLocaleString()}`,
       icon: <DollarSign className="h-4 w-4 text-muted-foreground" />,
       trend: totalRevenue > 0 ? "up" : "neutral",
     },
@@ -128,14 +128,14 @@ export default function Home() {
     {
       title: "Ενεργές συναλλαγές",
       value: `${pendingTransactionsCount}`,
-      description: pendingTransactionsCount > 0 ? `${pendingTransactionsCount} pending` : "",
+      description: pendingTransactionsCount > 0 ? `${pendingTransactionsCount} εκρεμμούν` : "",
       icon: <BarChart className="h-4 w-4 text-muted-foreground" />,
       trend: "neutral",
     },
     {
       title: "Συνολικά Έξοδα",
       value: `€${totalExpenses.toLocaleString()}`,
-      description: `Remaining debts: €${totalExpenses.toLocaleString()}`,
+      description: `Υπόλοιπα χρέη: €${totalExpenses.toLocaleString()}`,
       icon: <TrendingDown className="h-4 w-4 text-red-500" />,
       trend: totalExpenses > 0 ? "down" : "neutral",
     },

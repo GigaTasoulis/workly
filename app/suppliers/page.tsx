@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { generateId, getLocalData, setLocalData } from "@/lib/utils"
+import { TransactionList } from "@/components/TransactionList"
 import { initializeData } from "@/lib/data"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -177,9 +178,9 @@ export default function SuppliersPage() {
   // Helper: Compute total paid (or "spent") for a supplier (if needed)
   const getTotalPaid = (supplierId: string) => {
     return supplierTransactions
-      .filter((t) => t.supplierId === supplierId && t.status === "paid")
-      .reduce((sum, t) => sum + t.amount, 0)
-  }
+      .filter((t) => t.supplierId === supplierId)
+      .reduce((sum, t) => sum + (Number(t.amountPaid) || 0), 0);
+  }  
 
   // Helper: Compute outstanding balance ("Χρέη") from pending transactions
   const getDebt = (supplierId: string) => {
@@ -320,7 +321,7 @@ export default function SuppliersPage() {
             {t.totalSpent}: ${getTotalPaid(selectedSupplier?.id || "").toLocaleString()}
           </p>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex flex-wrap items-center gap-4">
           <Select
             value={supplierTransactionFilter}
             onValueChange={(value) =>
@@ -341,50 +342,12 @@ export default function SuppliersPage() {
           </Button>
         </div>
       </div>
-      <div className="space-y-4">
-        {getSupplierTransactions(selectedSupplier?.id || "").map((transaction) => (
-          <div key={transaction.id} className="flex items-start gap-4 rounded-md border p-4">
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center justify-between">
-                <p className="font-medium">{transaction.productName}</p>
-                <Badge variant="outline" className={
-                  transaction.status === "paid"
-                    ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
-                    : transaction.status === "pending"
-                      ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
-                      : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
-                }>
-                  {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>{transaction.date}</span>
-                <span>•</span>
-                <span>${(Number(transaction.amount) || 0).toLocaleString()}</span>
-              </div>
-              {transaction.notes && <p className="text-sm text-muted-foreground mt-2">{transaction.notes}</p>}
-              <p className="text-xs text-muted-foreground">
-                Εξοφλημένο: ${ (Number(transaction.amountPaid) || 0).toLocaleString() } / ${ (Number(transaction.amount) || 0).toLocaleString() }
-              </p>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Button size="sm" variant="outline" onClick={() => handleEditSupplierTransaction(transaction)}>
-                Επεξεργασία
-              </Button>
-              {transaction.status === "pending" && transaction.amountPaid < transaction.amount && (
-                <>
-                  <Button size="sm" variant="secondary" onClick={() => handleOpenSupplierPaymentDialog(transaction)}>
-                    Πληρωμή
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={() => handleDeleteSupplierTransaction(transaction.id)}>
-                    Διαγραφή
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+      <TransactionList
+        transactions={getSupplierTransactions(selectedSupplier?.id || "")}
+        onEdit={handleEditSupplierTransaction}
+        onDelete={handleDeleteSupplierTransaction}
+        onPayment={handleOpenSupplierPaymentDialog}
+      />
     </div>
   );  
 

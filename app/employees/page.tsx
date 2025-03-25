@@ -34,13 +34,17 @@ interface Employee {
   notes: string
 }
 
-interface Certification {
+interface WorkLog {
   id: string
   employeeId: string
-  name: string
-  issuer: string
+  workplaceId: string
   date: string
+  hoursWorked: string
+  notes: string
+  totalAmount: number
+  amountPaid: number
 }
+
 
 const initialEmployee: Employee = {
   id: "",
@@ -75,41 +79,37 @@ export default function EmployeesPage() {
   const [currentEmployee, setCurrentEmployee] = useState<Employee>(initialEmployee)
   const [isEditing, setIsEditing] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
-  const [certifications, setCertifications] = useState<Certification[]>([]);
-  const [isCertificationDialogOpen, setIsCertificationDialogOpen] = useState(false);
-  const [currentCertification, setCurrentCertification] = useState<Certification>({
+
+  const [workLogs, setWorkLogs] = useState<WorkLog[]>([])
+  const [currentWorkLog, setCurrentWorkLog] = useState<WorkLog>({
     id: "",
     employeeId: "",
-    name: "",
-    issuer: "",
+    workplaceId: "",
     date: "",
-  });
-  // New state for storing performance traits as simple text
-  const [performanceTraits, setPerformanceTraits] = useState<{
-    productivity: string;
-    attendance: string;
-    teamwork: string;
-    quality: string;
-  }>({
-    productivity: "Excellent",
-    attendance: "Very Good",
-    teamwork: "Good",
-    quality: "Average",
-  });
+    hoursWorked: "",
+    notes: "",
+    totalAmount: 0,
+    amountPaid: 0,
+  })
+  const [isWorkLogDialogOpen, setIsWorkLogDialogOpen] = useState(false)
+  const [isEditingWorkLog, setIsEditingWorkLog] = useState(false)
+  const [selectedEmployeeFilter, setSelectedEmployeeFilter] = useState<string>("all")
+  const [isPayDialogOpen, setIsPayDialogOpen] = useState(false)
+  const [workLogToPay, setWorkLogToPay] = useState<WorkLog | null>(null)
+  const [paymentAmount, setPaymentAmount] = useState<string>("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const logsPerPage = 3
+  const [sortOrder, setSortOrder] = useState<string>("desc") 
+  const [filterStatus, setFilterStatus] = useState<string>("all")
+  const [currentWorkLogPage, setCurrentWorkLogPage] = useState(1);
+  const [workLogSortOrder, setWorkLogSortOrder] = useState<string>("desc");
+  const [workLogStatusFilter, setWorkLogStatusFilter] = useState<string>("all");
 
-  // State for controlling the performance trait edit modal
-  const [isPerformanceDialogOpen, setIsPerformanceDialogOpen] = useState(false);
-
-  // State for editing traits (used in the modal)
-  const [editingPerformanceTraits, setEditingPerformanceTraits] = useState({
-    productivity: "Excellent",
-    attendance: "Very Good",
-    teamwork: "Good",
-    quality: "Average",
-  });
-
+  const workLogsPerPage = 10;
   
-  const [isEditingCertification, setIsEditingCertification] = useState(false);
+
+
+
   const { toast } = useToast()
 
   useEffect(() => {
@@ -125,31 +125,10 @@ export default function EmployeesPage() {
   }, [])
 
   useEffect(() => {
-    const certs = getLocalData("certifications") || [];
-    setCertifications(certs);
-  }, []);
+    const storedLogs = getLocalData("worklogs") || []
+    setWorkLogs(storedLogs)
+  }, [])
 
-  useEffect(() => {
-    if (selectedEmployee) {
-      const storageKey = `performanceTraits_${selectedEmployee.id}`;
-      const stored = getLocalData(storageKey);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setPerformanceTraits(parsed);
-        setEditingPerformanceTraits(parsed);
-      } else {
-        const defaultTraits = {
-          productivity: "Excellent",
-          attendance: "Very Good",
-          teamwork: "Good",
-          quality: "Average",
-        };
-        setPerformanceTraits(defaultTraits);
-        setEditingPerformanceTraits(defaultTraits);
-        setLocalData(storageKey, JSON.stringify(defaultTraits));
-      }
-    }
-  }, [selectedEmployee]);
   
   
   const columns = [
@@ -182,65 +161,6 @@ export default function EmployeesPage() {
       setSelectedEmployee(null)
     }
   }
-
-  const handleAddCertification = () => {
-    if (!selectedEmployee) {
-      toast({
-        title: "Error",
-        description: "No employee is selected. Please select an employee first.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setCurrentCertification({
-      id: "",
-      employeeId: selectedEmployee.id,
-      name: "",
-      issuer: "",
-      date: "",
-    });
-    setIsEditingCertification(false);
-    setIsCertificationDialogOpen(true);
-  };
-  
-  
-  const handleEditCertification = (cert: Certification) => {
-    setCurrentCertification(cert);
-    setIsEditingCertification(true);
-    setIsCertificationDialogOpen(true);
-  };
-  
-  const handleDeleteCertification = (id: string) => {
-    if (confirm("Are you sure you want to delete this certification?")) {
-      const updatedCerts = certifications.filter((c) => c.id !== id);
-      setCertifications(updatedCerts);
-      setLocalData("certifications", updatedCerts);
-    }
-  };
-  
-  const handleCertificationSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentCertification.name || !currentCertification.issuer || !currentCertification.date) {
-      toast({
-        title: "Error",
-        description: "All certification fields are required.",
-        variant: "destructive",
-      });
-      return;
-    }
-    let updatedCerts: Certification[];
-    if (isEditingCertification) {
-      updatedCerts = certifications.map((c) => (c.id === currentCertification.id ? currentCertification : c));
-      toast({ title: "Certification updated", description: "Certification updated successfully." });
-    } else {
-      const newCert = { ...currentCertification, id: generateId() };
-      updatedCerts = [...certifications, newCert];
-      toast({ title: "Certification added", description: "Certification added successfully." });
-    }
-    setCertifications(updatedCerts);
-    setLocalData("certifications", updatedCerts);
-    setIsCertificationDialogOpen(false);
-  };
   
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -306,34 +226,138 @@ export default function EmployeesPage() {
     const monthDiff = now.getMonth() - hire.getMonth()
 
     if (monthDiff < 0) {
-      return `${yearDiff - 1} ${t.years}, ${monthDiff + 12} ${t.months}`
+      return `${yearDiff - 1} ${t.years}, ${monthDiff + 12} ${t.monthss}`
     }
 
-    return `${yearDiff} ${t.years}, ${monthDiff} ${t.months}`
+    return `${yearDiff} ${t.years}, ${monthDiff} ${t.monthss}`
+  }
+
+  const handleAddWorkLog = () => {
+    setCurrentWorkLog({
+      id: "",
+      employeeId: selectedEmployee ? selectedEmployee.id : "",
+      workplaceId: "",
+      date: "",
+      hoursWorked: "",
+      notes: "",
+      totalAmount: 0,
+      amountPaid: 0,
+    })
+    setIsEditingWorkLog(false)
+    setIsWorkLogDialogOpen(true)
+  }
+
+  const handleEditWorkLog = (log: WorkLog) => {
+    setCurrentWorkLog(log)
+    setIsEditingWorkLog(true)
+    setIsWorkLogDialogOpen(true)
+  }
+
+  const handleDeleteWorkLog = (id: string) => {
+    if (confirm("Are you sure you want to delete this work log?")) {
+      const updatedLogs = workLogs.filter((log) => log.id !== id)
+      setWorkLogs(updatedLogs)
+      setLocalData("worklogs", updatedLogs)
+      toast({
+        title: "Work Log deleted",
+        description: "Work log entry deleted successfully.",
+      })
+    }
+  }
+
+  const handleWorkLogSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!currentWorkLog.employeeId || !currentWorkLog.workplaceId || !currentWorkLog.date) {
+      toast({
+        title: "Error",
+        description: "Employee, workplace, and date are required.",
+        variant: "destructive",
+      })
+      return
+    }
+    let updatedLogs: WorkLog[]
+    if (isEditingWorkLog) {
+      updatedLogs = workLogs.map((log) =>
+        log.id === currentWorkLog.id ? currentWorkLog : log
+      )
+      toast({
+        title: "Work Log updated",
+        description: "Work log updated successfully.",
+      })
+    } else {
+      const newLog = { ...currentWorkLog, id: generateId() }
+      updatedLogs = [...workLogs, newLog]
+      toast({
+        title: "Work Log added",
+        description: "Work log added successfully.",
+      })
+    }
+    setWorkLogs(updatedLogs)
+    setLocalData("worklogs", updatedLogs)
+    setIsWorkLogDialogOpen(false)
+  }
+
+  const handleOpenPayDialog = (log: WorkLog) => {
+    setWorkLogToPay(log)
+    setPaymentAmount("")
+    setIsPayDialogOpen(true)
+  }
+  
+  // Handler for submitting a payment
+  const handlePaySubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!workLogToPay) return
+    const remaining = workLogToPay.totalAmount - workLogToPay.amountPaid
+    const payment = parseFloat(paymentAmount)
+    if (isNaN(payment) || payment <= 0) {
+      toast({
+        title: "Error",
+        description: "Enter a valid payment amount.",
+        variant: "destructive",
+      })
+      return
+    }
+    if (payment > remaining) {
+      toast({
+        title: "Error",
+        description: `Payment cannot exceed the remaining amount (€${remaining}).`,
+        variant: "destructive",
+      })
+      return
+    }
+    // Update work log payment
+    const updatedLog = { ...workLogToPay, amountPaid: workLogToPay.amountPaid + payment }
+    const updatedLogs = workLogs.map((log) => log.id === updatedLog.id ? updatedLog : log)
+    setWorkLogs(updatedLogs)
+    setLocalData("worklogs", updatedLogs)
+    toast({
+      title: "Payment recorded",
+      description: `€${payment} payment recorded.`,
+    })
+    setIsPayDialogOpen(false)
   }
 
 
-  const mapMetricToTrait = (value: number) => {
-    if (value >= 90) return "Excellent";
-    if (value >= 80) return "Very Good";
-    if (value >= 70) return "Good";
-    return "Average";
-  };
+  let filteredLogs = workLogs;
+  if (selectedEmployeeFilter !== "all") {
+    filteredLogs = filteredLogs.filter((log) => log.employeeId === selectedEmployeeFilter);
+  }
+  if (workLogStatusFilter !== "all") {
+    if (workLogStatusFilter === "paid") {
+      filteredLogs = filteredLogs.filter((log) => log.amountPaid === log.totalAmount);
+    } else if (workLogStatusFilter === "pending") {
+      filteredLogs = filteredLogs.filter((log) => log.amountPaid < log.totalAmount);
+    }
+  }
+  filteredLogs.sort((a, b) =>
+    workLogSortOrder === "desc"
+      ? new Date(b.date).getTime() - new Date(a.date).getTime()
+      : new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  const startIndex = (currentWorkLogPage - 1) * workLogsPerPage;
+  const paginatedWorkLogs = filteredLogs.slice(startIndex, startIndex + workLogsPerPage);
   
 
-  const getCertifications = (employeeId: string): Certification[] => {
-    const storedCerts = getLocalData("certifications") || [];
-    return storedCerts
-      .filter((cert: any) => cert.employeeId === employeeId || true)
-      .map((cert: any, index: number) => ({
-        id: cert.id || `cert-${index}`,
-        employeeId: cert.employeeId || employeeId,
-        name: cert.name,
-        issuer: cert.issuer,
-        date: cert.date,
-      }));
-  };
-  
 
   return (
     <div className="space-y-6">
@@ -384,7 +408,7 @@ export default function EmployeesPage() {
                   <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="details">{t.details}</TabsTrigger>
                     <TabsTrigger value="employment">{t.employmentDetails}</TabsTrigger>
-                    <TabsTrigger value="performance">{t.performance}</TabsTrigger>
+                    <TabsTrigger value="history">Ιστορικό</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="details" className="space-y-4 pt-4">
@@ -460,60 +484,94 @@ export default function EmployeesPage() {
                         {calculateTenure(selectedEmployee.hireDate)}
                       </div>
                     </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-sm font-medium">Πιστοποιήσεις</h3>
-                        <Button onClick={handleAddCertification} size="sm">
-                          Προσθήκη
-                        </Button>
-                      </div>
-                      <div className="space-y-2">
-                        {getCertifications(selectedEmployee.id).map((cert) => (
-                          <div key={cert.id} className="flex items-start gap-2 rounded-md border p-2">
-                            <GraduationCap className="h-4 w-4 text-muted-foreground mt-0.5" />
-                            <div className="flex-1">
-                              <p className="text-sm font-medium">{cert.name}</p>
-                              <p className="text-xs text-muted-foreground">{cert.issuer}</p>
-                              <p className="text-xs text-muted-foreground">Issued: {cert.date}</p>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <Button size="sm" variant="outline" onClick={() => handleEditCertification(cert)}>
-                                Επεξεργασία
-                              </Button>
-                              <Button size="sm" variant="destructive" onClick={() => handleDeleteCertification(cert.id)}>
-                                Διαγραφή
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
                   </TabsContent>
-
-                  <TabsContent value="performance" className="space-y-4 pt-4">
+                  <TabsContent value="history" className="space-y-4 pt-4">
                     {selectedEmployee ? (
-                      <div className="space-y-4">
-                        {Object.entries(performanceTraits).map(([key, trait]) => (
-                          <div key={key} className="flex justify-between">
-                            <h3 className="text-sm font-medium">
-                              {key === "productivity" && t.productivity}
-                              {key === "attendance" && t.attendance}
-                              {key === "teamwork" && t.teamwork}
-                              {key === "quality" && t.quality}
-                            </h3>
-                            <span className="text-sm text-muted-foreground">{trait}</span>
-                          </div>
-                        ))}
-                        <Button onClick={() => { 
-                          console.log("Editing traits clicked");
-                          setIsPerformanceDialogOpen(true);
-                        }} size="sm">
-                          Επεξεργασία
-                        </Button>
+                      <div>
+                        {/* Filter and Paginate Logs */}
+                        {(() => {
+                          // Filter by employee and status
+                          let logs = workLogs.filter(log => log.employeeId === selectedEmployee.id)
+                          if (filterStatus === "paid") {
+                            logs = logs.filter(log => log.amountPaid === log.totalAmount)
+                          } else if (filterStatus === "pending") {
+                            logs = logs.filter(log => log.amountPaid < log.totalAmount)
+                          }
+
+                          logs.sort((a, b) =>
+                            sortOrder === "desc"
+                              ? new Date(b.date).getTime() - new Date(a.date).getTime()
+                              : new Date(a.date).getTime() - new Date(b.date).getTime()
+                          )
+
+                          const totalPages = Math.ceil(logs.length / logsPerPage)
+                          const startIndex = (currentPage - 1) * logsPerPage
+                          const paginatedLogs = logs.slice(startIndex, startIndex + logsPerPage)
+
+                          return (
+                            <div className="space-y-4">
+                              <div className="flex gap-4 mb-4">
+                                <Select value={sortOrder} onValueChange={(value) => { setSortOrder(value); setCurrentPage(1) }}>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Sort by Date" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="desc">Πιο πρόσφατες</SelectItem>
+                                    <SelectItem value="asc">Παλαιότερες</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <Select value={filterStatus} onValueChange={(value) => { setFilterStatus(value); setCurrentPage(1) }}>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Filter by Status" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="all">Όλες</SelectItem>
+                                    <SelectItem value="paid">Πληρωμένες</SelectItem>
+                                    <SelectItem value="pending">Εκκρεμείς</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              {paginatedLogs.map(log => (
+                                <div key={log.id} className="border p-2 rounded-md">
+                                  <p><strong>Ημ/νία:</strong> {log.date}</p>
+                                  <p><strong>Ώρες:</strong> {log.hoursWorked}</p>
+                                  <p><strong>Χώρος Εργασίας:</strong> {getWorkplaceName(log.workplaceId)}</p>
+                                  <p>
+                                    <strong>Πληρωμή:</strong> {`${log.amountPaid} / ${log.totalAmount}`}
+                                    {log.amountPaid === log.totalAmount ? (
+                                      <Badge className="bg-green-100 text-green-800 ml-2">Πληρωμένη</Badge>
+                                    ) : (
+                                      <Badge className="bg-yellow-100 text-yellow-800 ml-2">Εκκρεμή</Badge>
+                                    )}
+                                  </p>
+                                </div>
+                              ))}
+                              {/* Pagination Controls */}
+                              <div className="flex justify-center items-center mt-4 space-x-4">
+                                <Button
+                                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
+                                  disabled={currentPage === 1}
+                                  onClick={() => setCurrentPage(currentPage - 1)}
+                                >
+                                  ←
+                                </Button>
+                                <span className="text-sm font-medium">
+                                  {currentPage} / {totalPages}
+                                </span>
+                                <Button
+                                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
+                                  disabled={currentPage === totalPages || totalPages === 0}
+                                  onClick={() => setCurrentPage(currentPage + 1)}
+                                >
+                                  →
+                                </Button>
+                              </div>
+                            </div>
+                          )
+                        })()}
                       </div>
                     ) : (
-                      <p>No performance metrics available.</p>
+                      <p>Δεν έχει επιλεχθεί εργαζόμενος.</p>
                     )}
                   </TabsContent>
                 </Tabs>
@@ -533,6 +591,153 @@ export default function EmployeesPage() {
               </CardContent>
             </Card>
           )}
+        </div>
+      </div>
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold tracking-tight">Καταγραφή Εργασίας</h2>
+          <Button onClick={handleAddWorkLog}>Προσθήκη Ωρών</Button>
+        </div>
+        <div className="flex gap-4 mb-4">
+          <Select
+            value={selectedEmployeeFilter}
+            onValueChange={(value) => { 
+              setSelectedEmployeeFilter(value); 
+              setCurrentWorkLogPage(1); 
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Filter by Employee" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Όλοι</SelectItem>
+              {employees.map((emp) => (
+                <SelectItem key={emp.id} value={emp.id}>
+                  {emp.firstName} {emp.lastName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {/* Status Filter */}
+          <Select
+            value={workLogStatusFilter}
+            onValueChange={(value) => { 
+              setWorkLogStatusFilter(value); 
+              setCurrentWorkLogPage(1); 
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Filter by Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Όλα</SelectItem>
+              <SelectItem value="paid">Πληρωμένη</SelectItem>
+              <SelectItem value="pending">Εκκρεμή</SelectItem>
+            </SelectContent>
+          </Select>
+          {/* Sort Order Filter */}
+          <Select
+            value={workLogSortOrder}
+            onValueChange={(value) => { 
+              setWorkLogSortOrder(value); 
+              setCurrentWorkLogPage(1); 
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Sort by Date" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc">Νεότερα</SelectItem>
+              <SelectItem value="asc">Παλαιότερα</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Υπαλληλος
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Χωρος εργασιας
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ημ/νια
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ωρες Εργασιας
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Πληρωμη</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Σημειωσεις
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ενεργειες
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {paginatedWorkLogs.map((log) => {
+                const employee = employees.find((emp) => emp.id === log.employeeId);
+                return (
+                  <tr key={log.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {employee ? `${employee.firstName} ${employee.lastName}` : "Unknown"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {getWorkplaceName(log.workplaceId)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{log.date}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{log.hoursWorked}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {`${log.amountPaid} / ${log.totalAmount}`}
+                      {log.amountPaid === log.totalAmount ? (
+                        <Badge className="bg-green-100 text-green-800 ml-2">Πληρωμένη</Badge>
+                      ) : (
+                        <Badge className="bg-yellow-100 text-yellow-800 ml-2">Εκκρεμή</Badge>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{log.notes}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => handleEditWorkLog(log)}>
+                          Επεξεργασία
+                        </Button>
+                        {(log.totalAmount - log.amountPaid) > 0 && (
+                          <Button size="sm" variant="secondary" onClick={() => handleOpenPayDialog(log)}>
+                            Πληρωμή
+                          </Button>
+                        )}
+                        <Button size="sm" variant="destructive" onClick={() => handleDeleteWorkLog(log.id)}>
+                          Διαγραφή
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="flex justify-center items-center mt-4 space-x-4">
+            <Button
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
+              disabled={currentWorkLogPage === 1}
+              onClick={() => setCurrentWorkLogPage(currentWorkLogPage - 1)}
+            >
+              ←
+            </Button>
+            <span className="text-sm font-medium">
+              {currentWorkLogPage} / {Math.ceil(filteredLogs.length / workLogsPerPage)}
+            </span>
+            <Button
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
+              disabled={currentWorkLogPage === Math.ceil(filteredLogs.length / workLogsPerPage) || Math.ceil(filteredLogs.length / workLogsPerPage) === 0}
+              onClick={() => setCurrentWorkLogPage(currentWorkLogPage + 1)}
+            >
+              →
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -659,135 +864,138 @@ export default function EmployeesPage() {
           </form>
         </DialogContent>
       </Dialog>
-      <Dialog open={isPerformanceDialogOpen} onOpenChange={setIsPerformanceDialogOpen}>
+      <Dialog open={isWorkLogDialogOpen} onOpenChange={setIsWorkLogDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Επεξεργασία Αποδόσεων</DialogTitle>
+            <DialogTitle>{isEditingWorkLog ? "Επεξεργασία Καταγραφής" : "Προσθήκη Καταγραφής"}</DialogTitle>
           </DialogHeader>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              // Save the edited traits
-              setPerformanceTraits(editingPerformanceTraits);
-              if (selectedEmployee) {
-                setLocalData(`performanceTraits_${selectedEmployee.id}`, editingPerformanceTraits);
-              }
-              setIsPerformanceDialogOpen(false);
-            }}
-          >
+          <form onSubmit={handleWorkLogSubmit}>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="prod">Productivity</Label>
+                <Label htmlFor="worklog-employee">Εργαζόμενος</Label>
+                <Select
+                  value={currentWorkLog.employeeId}
+                  onValueChange={(value) =>
+                    setCurrentWorkLog({ ...currentWorkLog, employeeId: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Επιλογή Εργαζόμενου" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id}>
+                        {emp.firstName} {emp.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Replace free-text location with workplace selection */}
+              <div className="space-y-2">
+                <Label htmlFor="worklog-workplace">Χώρος Εργασίας</Label>
+                <Select
+                  value={currentWorkLog.workplaceId}
+                  onValueChange={(value) =>
+                    setCurrentWorkLog({ ...currentWorkLog, workplaceId: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Επιλογή Χώρου Εργασίας" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {workplaces.map((wp) => (
+                      <SelectItem key={wp.id} value={wp.id}>
+                        {wp.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="worklog-date">Ημ/νία</Label>
                 <Input
-                  id="prod"
-                  value={editingPerformanceTraits.productivity}
+                  id="worklog-date"
+                  type="date"
+                  value={currentWorkLog.date}
                   onChange={(e) =>
-                    setEditingPerformanceTraits({
-                      ...editingPerformanceTraits,
-                      productivity: e.target.value,
-                    })
+                    setCurrentWorkLog({ ...currentWorkLog, date: e.target.value })
                   }
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="att">Attendance</Label>
+                <Label htmlFor="worklog-hours">Ώρες Εργασίας</Label>
                 <Input
-                  id="att"
-                  value={editingPerformanceTraits.attendance}
+                  id="worklog-hours"
+                  type="number"
+                  value={currentWorkLog.hoursWorked}
                   onChange={(e) =>
-                    setEditingPerformanceTraits({
-                      ...editingPerformanceTraits,
-                      attendance: e.target.value,
-                    })
+                    setCurrentWorkLog({ ...currentWorkLog, hoursWorked: e.target.value })
                   }
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="team">Teamwork</Label>
+                <Label htmlFor="worklog-total-amount">Συνολικό Ποσό (€)</Label>
                 <Input
-                  id="team"
-                  value={editingPerformanceTraits.teamwork}
+                  id="worklog-total-amount"
+                  type="number"
+                  value={currentWorkLog.totalAmount}
                   onChange={(e) =>
-                    setEditingPerformanceTraits({
-                      ...editingPerformanceTraits,
-                      teamwork: e.target.value,
-                    })
+                    setCurrentWorkLog({ ...currentWorkLog, totalAmount: parseFloat(e.target.value) })
                   }
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="qual">Quality</Label>
-                <Input
-                  id="qual"
-                  value={editingPerformanceTraits.quality}
+                <Label htmlFor="worklog-notes">Σημειώσεις</Label>
+                <Textarea
+                  id="worklog-notes"
+                  value={currentWorkLog.notes}
                   onChange={(e) =>
-                    setEditingPerformanceTraits({
-                      ...editingPerformanceTraits,
-                      quality: e.target.value,
-                    })
+                    setCurrentWorkLog({ ...currentWorkLog, notes: e.target.value })
                   }
+                  rows={3}
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsPerformanceDialogOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setIsWorkLogDialogOpen(false)}>
                 Ακύρωση
               </Button>
-              <Button type="submit">Αποθήκευση</Button>
+              <Button type="submit">{isEditingWorkLog ? "Update" : "Add"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
-
-      <Dialog open={isCertificationDialogOpen} onOpenChange={setIsCertificationDialogOpen}>
+      <Dialog open={isPayDialogOpen} onOpenChange={setIsPayDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>
-              {isEditingCertification ? "Επεξεργασία Πιστοποίησης" : "Προσθήκη Πιστοποίησης"}
-            </DialogTitle>
+            <DialogTitle>Πληρωμή</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCertificationSubmit}>
+          <form onSubmit={handlePaySubmit}>
             <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="certName">Όνομα Πιστοποίησης *</Label>
-                <Input
-                  id="certName"
-                  value={currentCertification.name}
-                  onChange={(e) =>
-                    setCurrentCertification({ ...currentCertification, name: e.target.value })
-                  }
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="certIssuer">Εκδότη</Label>
-                <Input
-                  id="certIssuer"
-                  value={currentCertification.issuer}
-                  onChange={(e) =>
-                    setCurrentCertification({ ...currentCertification, issuer: e.target.value })
-                  }
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="certDate">Ημερομηνία *</Label>
-                <Input
-                  id="certDate"
-                  type="date"
-                  value={currentCertification.date}
-                  onChange={(e) =>
-                    setCurrentCertification({ ...currentCertification, date: e.target.value })
-                  }
-                  required
-                />
-              </div>
+              {workLogToPay && (
+                <>
+                  <div>
+                    <p>Υπολοιπόμενο ποσό: {workLogToPay.totalAmount - workLogToPay.amountPaid}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="payment-amount">Ποσό πληρωμής (€)</Label>
+                    <Input
+                      id="payment-amount"
+                      type="number"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      placeholder={`Εισάγετε ποσό ( μέγιστο €${workLogToPay.totalAmount - workLogToPay.amountPaid} )`}
+                    />
+                  </div>
+                </>
+              )}
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsCertificationDialogOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setIsPayDialogOpen(false)}>
                 Ακύρωση
               </Button>
-              <Button type="submit">{isEditingCertification ? "Αποθήκευση" : "Προσθήκη"}</Button>
+              <Button type="submit">Υποβολή Πληρωμής</Button>
             </DialogFooter>
           </form>
         </DialogContent>

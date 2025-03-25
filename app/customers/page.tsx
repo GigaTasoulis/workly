@@ -94,8 +94,8 @@ export default function CustomersPage() {
     { key: "email", label: t.email },
     { key: "address", label: t.address },
     { key: "phone", label: t.phone },
-    { key: "afm", label: "AFM" },
-    { key: "tractor", label: "Tractor" },
+    { key: "afm", label: "ΑΦΜ" },
+    { key: "tractor", label: "Τρακτέρ" },
     { key: "debt", label: "Χρέη" },
   ]
 
@@ -455,7 +455,7 @@ export default function CustomersPage() {
 
             <div className="flex space-x-2 pt-4">
               <Button variant="outline" size="sm" onClick={() => handleEdit(selectedCustomer)} className="flex-1">
-                Edit
+                Επεξεργασία
               </Button>
               <Button
                 variant="destructive"
@@ -467,7 +467,7 @@ export default function CustomersPage() {
                 }}
                 className="flex-1"
               >
-                Delete
+                Διαγραφή
               </Button>
             </div>
           </TabsContent>

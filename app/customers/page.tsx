@@ -94,8 +94,8 @@ export default function CustomersPage() {
     { key: "email", label: t.email },
     { key: "address", label: t.address },
     { key: "phone", label: t.phone },
-    { key: "afm", label: "AFM" },
-    { key: "tractor", label: "Tractor" },
+    { key: "afm", label: "ΑΦΜ" },
+    { key: "tractor", label: "Τρακτέρ" },
     { key: "debt", label: "Χρέη" },
   ]
 

@@ -34,13 +34,15 @@ interface Employee {
   notes: string
 }
 
-interface Certification {
+interface WorkLog {
   id: string
   employeeId: string
-  name: string
-  issuer: string
+  workplaceId: string
   date: string
+  hoursWorked: string
+  notes: string
 }
+
 
 const initialEmployee: Employee = {
   id: "",
@@ -75,15 +77,7 @@ export default function EmployeesPage() {
   const [currentEmployee, setCurrentEmployee] = useState<Employee>(initialEmployee)
   const [isEditing, setIsEditing] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
-  const [certifications, setCertifications] = useState<Certification[]>([]);
   const [isCertificationDialogOpen, setIsCertificationDialogOpen] = useState(false);
-  const [currentCertification, setCurrentCertification] = useState<Certification>({
-    id: "",
-    employeeId: "",
-    name: "",
-    issuer: "",
-    date: "",
-  });
   // New state for storing performance traits as simple text
   const [performanceTraits, setPerformanceTraits] = useState<{
     productivity: string;
@@ -107,9 +101,19 @@ export default function EmployeesPage() {
     teamwork: "Good",
     quality: "Average",
   });
+  const [workLogs, setWorkLogs] = useState<WorkLog[]>([])
+  const [currentWorkLog, setCurrentWorkLog] = useState<WorkLog>({
+    id: "",
+    employeeId: "",
+    workplaceId: "",
+    date: "",
+    hoursWorked: "",
+    notes: "",
+  })
+  const [isWorkLogDialogOpen, setIsWorkLogDialogOpen] = useState(false)
+  const [isEditingWorkLog, setIsEditingWorkLog] = useState(false)
+  const [selectedEmployeeFilter, setSelectedEmployeeFilter] = useState<string>("all")
 
-  
-  const [isEditingCertification, setIsEditingCertification] = useState(false);
   const { toast } = useToast()
 
   useEffect(() => {
@@ -125,9 +129,9 @@ export default function EmployeesPage() {
   }, [])
 
   useEffect(() => {
-    const certs = getLocalData("certifications") || [];
-    setCertifications(certs);
-  }, []);
+    const storedLogs = getLocalData("worklogs") || []
+    setWorkLogs(storedLogs)
+  }, [])
 
   useEffect(() => {
     if (selectedEmployee) {
@@ -182,65 +186,6 @@ export default function EmployeesPage() {
       setSelectedEmployee(null)
     }
   }
-
-  const handleAddCertification = () => {
-    if (!selectedEmployee) {
-      toast({
-        title: "Error",
-        description: "No employee is selected. Please select an employee first.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setCurrentCertification({
-      id: "",
-      employeeId: selectedEmployee.id,
-      name: "",
-      issuer: "",
-      date: "",
-    });
-    setIsEditingCertification(false);
-    setIsCertificationDialogOpen(true);
-  };
-  
-  
-  const handleEditCertification = (cert: Certification) => {
-    setCurrentCertification(cert);
-    setIsEditingCertification(true);
-    setIsCertificationDialogOpen(true);
-  };
-  
-  const handleDeleteCertification = (id: string) => {
-    if (confirm("Are you sure you want to delete this certification?")) {
-      const updatedCerts = certifications.filter((c) => c.id !== id);
-      setCertifications(updatedCerts);
-      setLocalData("certifications", updatedCerts);
-    }
-  };
-  
-  const handleCertificationSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentCertification.name || !currentCertification.issuer || !currentCertification.date) {
-      toast({
-        title: "Error",
-        description: "All certification fields are required.",
-        variant: "destructive",
-      });
-      return;
-    }
-    let updatedCerts: Certification[];
-    if (isEditingCertification) {
-      updatedCerts = certifications.map((c) => (c.id === currentCertification.id ? currentCertification : c));
-      toast({ title: "Certification updated", description: "Certification updated successfully." });
-    } else {
-      const newCert = { ...currentCertification, id: generateId() };
-      updatedCerts = [...certifications, newCert];
-      toast({ title: "Certification added", description: "Certification added successfully." });
-    }
-    setCertifications(updatedCerts);
-    setLocalData("certifications", updatedCerts);
-    setIsCertificationDialogOpen(false);
-  };
   
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -312,27 +257,75 @@ export default function EmployeesPage() {
     return `${yearDiff} ${t.years}, ${monthDiff} ${t.months}`
   }
 
+  const handleAddWorkLog = () => {
+    setCurrentWorkLog({
+      id: "",
+      employeeId: selectedEmployee ? selectedEmployee.id : "",
+      workplaceId: "",
+      date: "",
+      hoursWorked: "",
+      notes: "",
+    })
+    setIsEditingWorkLog(false)
+    setIsWorkLogDialogOpen(true)
+  }
 
-  const mapMetricToTrait = (value: number) => {
-    if (value >= 90) return "Excellent";
-    if (value >= 80) return "Very Good";
-    if (value >= 70) return "Good";
-    return "Average";
-  };
-  
+  const handleEditWorkLog = (log: WorkLog) => {
+    setCurrentWorkLog(log)
+    setIsEditingWorkLog(true)
+    setIsWorkLogDialogOpen(true)
+  }
 
-  const getCertifications = (employeeId: string): Certification[] => {
-    const storedCerts = getLocalData("certifications") || [];
-    return storedCerts
-      .filter((cert: any) => cert.employeeId === employeeId || true)
-      .map((cert: any, index: number) => ({
-        id: cert.id || `cert-${index}`,
-        employeeId: cert.employeeId || employeeId,
-        name: cert.name,
-        issuer: cert.issuer,
-        date: cert.date,
-      }));
-  };
+  const handleDeleteWorkLog = (id: string) => {
+    if (confirm("Are you sure you want to delete this work log?")) {
+      const updatedLogs = workLogs.filter((log) => log.id !== id)
+      setWorkLogs(updatedLogs)
+      setLocalData("worklogs", updatedLogs)
+      toast({
+        title: "Work Log deleted",
+        description: "Work log entry deleted successfully.",
+      })
+    }
+  }
+
+  const handleWorkLogSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!currentWorkLog.employeeId || !currentWorkLog.workplaceId || !currentWorkLog.date) {
+      toast({
+        title: "Error",
+        description: "Employee, workplace, and date are required.",
+        variant: "destructive",
+      })
+      return
+    }
+    let updatedLogs: WorkLog[]
+    if (isEditingWorkLog) {
+      updatedLogs = workLogs.map((log) =>
+        log.id === currentWorkLog.id ? currentWorkLog : log
+      )
+      toast({
+        title: "Work Log updated",
+        description: "Work log updated successfully.",
+      })
+    } else {
+      const newLog = { ...currentWorkLog, id: generateId() }
+      updatedLogs = [...workLogs, newLog]
+      toast({
+        title: "Work Log added",
+        description: "Work log added successfully.",
+      })
+    }
+    setWorkLogs(updatedLogs)
+    setLocalData("worklogs", updatedLogs)
+    setIsWorkLogDialogOpen(false)
+  }
+
+  // Filtering work logs based on employee selection
+  const filteredWorkLogs =
+    selectedEmployeeFilter === "all"
+      ? workLogs
+      : workLogs.filter((log) => log.employeeId === selectedEmployeeFilter)
+
   
 
   return (
@@ -460,35 +453,6 @@ export default function EmployeesPage() {
                         {calculateTenure(selectedEmployee.hireDate)}
                       </div>
                     </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-sm font-medium">Πιστοποιήσεις</h3>
-                        <Button onClick={handleAddCertification} size="sm">
-                          Προσθήκη
-                        </Button>
-                      </div>
-                      <div className="space-y-2">
-                        {getCertifications(selectedEmployee.id).map((cert) => (
-                          <div key={cert.id} className="flex items-start gap-2 rounded-md border p-2">
-                            <GraduationCap className="h-4 w-4 text-muted-foreground mt-0.5" />
-                            <div className="flex-1">
-                              <p className="text-sm font-medium">{cert.name}</p>
-                              <p className="text-xs text-muted-foreground">{cert.issuer}</p>
-                              <p className="text-xs text-muted-foreground">Issued: {cert.date}</p>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <Button size="sm" variant="outline" onClick={() => handleEditCertification(cert)}>
-                                Επεξεργασία
-                              </Button>
-                              <Button size="sm" variant="destructive" onClick={() => handleDeleteCertification(cert.id)}>
-                                Διαγραφή
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
                   </TabsContent>
 
                   <TabsContent value="performance" className="space-y-4 pt-4">
@@ -533,6 +497,87 @@ export default function EmployeesPage() {
               </CardContent>
             </Card>
           )}
+        </div>
+      </div>
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold tracking-tight">Καταγραφή Εργασίας</h2>
+          <Button onClick={handleAddWorkLog}>Προσθήκη Ωρών</Button>
+        </div>
+        <div className="mb-4">
+          <Select value={selectedEmployeeFilter} onValueChange={(value) => setSelectedEmployeeFilter(value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Filter by Employee" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              {employees.map((emp) => (
+                <SelectItem key={emp.id} value={emp.id}>
+                  {emp.firstName} {emp.lastName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Υπαλληλος
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Χωρος εργασιας
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ημ/νια
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ωρες Εργασιας
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Σημειωσεις
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ενεργειες
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredWorkLogs.map((log) => {
+                const employee = employees.find((emp) => emp.id === log.employeeId)
+                return (
+                  <tr key={log.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {employee ? `${employee.firstName} ${employee.lastName}` : "Unknown"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {getWorkplaceName(log.workplaceId)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {log.date}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {log.hoursWorked}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {log.notes}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => handleEditWorkLog(log)}>
+                          Edit
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => handleDeleteWorkLog(log.id)}>
+                          Delete
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -738,56 +783,93 @@ export default function EmployeesPage() {
           </form>
         </DialogContent>
       </Dialog>
-
-      <Dialog open={isCertificationDialogOpen} onOpenChange={setIsCertificationDialogOpen}>
+      <Dialog open={isWorkLogDialogOpen} onOpenChange={setIsWorkLogDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>
-              {isEditingCertification ? "Επεξεργασία Πιστοποίησης" : "Προσθήκη Πιστοποίησης"}
-            </DialogTitle>
+            <DialogTitle>{isEditingWorkLog ? "Edit Work Log" : "Add Work Log"}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCertificationSubmit}>
+          <form onSubmit={handleWorkLogSubmit}>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="certName">Όνομα Πιστοποίησης *</Label>
-                <Input
-                  id="certName"
-                  value={currentCertification.name}
-                  onChange={(e) =>
-                    setCurrentCertification({ ...currentCertification, name: e.target.value })
+                <Label htmlFor="worklog-employee">Employee</Label>
+                <Select
+                  value={currentWorkLog.employeeId}
+                  onValueChange={(value) =>
+                    setCurrentWorkLog({ ...currentWorkLog, employeeId: value })
                   }
-                  required
-                />
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id}>
+                        {emp.firstName} {emp.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Replace free-text location with workplace selection */}
+              <div className="space-y-2">
+                <Label htmlFor="worklog-workplace">Workplace</Label>
+                <Select
+                  value={currentWorkLog.workplaceId}
+                  onValueChange={(value) =>
+                    setCurrentWorkLog({ ...currentWorkLog, workplaceId: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Workplace" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {workplaces.map((wp) => (
+                      <SelectItem key={wp.id} value={wp.id}>
+                        {wp.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="certIssuer">Εκδότη</Label>
+                <Label htmlFor="worklog-date">Date</Label>
                 <Input
-                  id="certIssuer"
-                  value={currentCertification.issuer}
-                  onChange={(e) =>
-                    setCurrentCertification({ ...currentCertification, issuer: e.target.value })
-                  }
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="certDate">Ημερομηνία *</Label>
-                <Input
-                  id="certDate"
+                  id="worklog-date"
                   type="date"
-                  value={currentCertification.date}
+                  value={currentWorkLog.date}
                   onChange={(e) =>
-                    setCurrentCertification({ ...currentCertification, date: e.target.value })
+                    setCurrentWorkLog({ ...currentWorkLog, date: e.target.value })
                   }
-                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="worklog-hours">Hours Worked</Label>
+                <Input
+                  id="worklog-hours"
+                  type="number"
+                  value={currentWorkLog.hoursWorked}
+                  onChange={(e) =>
+                    setCurrentWorkLog({ ...currentWorkLog, hoursWorked: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="worklog-notes">Notes</Label>
+                <Textarea
+                  id="worklog-notes"
+                  value={currentWorkLog.notes}
+                  onChange={(e) =>
+                    setCurrentWorkLog({ ...currentWorkLog, notes: e.target.value })
+                  }
+                  rows={3}
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsCertificationDialogOpen(false)}>
-                Ακύρωση
+              <Button type="button" variant="outline" onClick={() => setIsWorkLogDialogOpen(false)}>
+                Cancel
               </Button>
-              <Button type="submit">{isEditingCertification ? "Αποθήκευση" : "Προσθήκη"}</Button>
+              <Button type="submit">{isEditingWorkLog ? "Update" : "Add"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

@@ -79,30 +79,7 @@ export default function EmployeesPage() {
   const [currentEmployee, setCurrentEmployee] = useState<Employee>(initialEmployee)
   const [isEditing, setIsEditing] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
-  const [isCertificationDialogOpen, setIsCertificationDialogOpen] = useState(false);
-  // New state for storing performance traits as simple text
-  const [performanceTraits, setPerformanceTraits] = useState<{
-    productivity: string;
-    attendance: string;
-    teamwork: string;
-    quality: string;
-  }>({
-    productivity: "Excellent",
-    attendance: "Very Good",
-    teamwork: "Good",
-    quality: "Average",
-  });
 
-  // State for controlling the performance trait edit modal
-  const [isPerformanceDialogOpen, setIsPerformanceDialogOpen] = useState(false);
-
-  // State for editing traits (used in the modal)
-  const [editingPerformanceTraits, setEditingPerformanceTraits] = useState({
-    productivity: "Excellent",
-    attendance: "Very Good",
-    teamwork: "Good",
-    quality: "Average",
-  });
   const [workLogs, setWorkLogs] = useState<WorkLog[]>([])
   const [currentWorkLog, setCurrentWorkLog] = useState<WorkLog>({
     id: "",
@@ -123,7 +100,14 @@ export default function EmployeesPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const logsPerPage = 3
   const [sortOrder, setSortOrder] = useState<string>("desc") 
-  const [filterStatus, setFilterStatus] = useState<string>("all") 
+  const [filterStatus, setFilterStatus] = useState<string>("all")
+  const [currentWorkLogPage, setCurrentWorkLogPage] = useState(1);
+  const [workLogSortOrder, setWorkLogSortOrder] = useState<string>("desc");
+  const [workLogStatusFilter, setWorkLogStatusFilter] = useState<string>("all");
+
+  const workLogsPerPage = 10;
+  
+
 
 
   const { toast } = useToast()
@@ -145,27 +129,6 @@ export default function EmployeesPage() {
     setWorkLogs(storedLogs)
   }, [])
 
-  useEffect(() => {
-    if (selectedEmployee) {
-      const storageKey = `performanceTraits_${selectedEmployee.id}`;
-      const stored = getLocalData(storageKey);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setPerformanceTraits(parsed);
-        setEditingPerformanceTraits(parsed);
-      } else {
-        const defaultTraits = {
-          productivity: "Excellent",
-          attendance: "Very Good",
-          teamwork: "Good",
-          quality: "Average",
-        };
-        setPerformanceTraits(defaultTraits);
-        setEditingPerformanceTraits(defaultTraits);
-        setLocalData(storageKey, JSON.stringify(defaultTraits));
-      }
-    }
-  }, [selectedEmployee]);
   
   
   const columns = [
@@ -263,10 +226,10 @@ export default function EmployeesPage() {
     const monthDiff = now.getMonth() - hire.getMonth()
 
     if (monthDiff < 0) {
-      return `${yearDiff - 1} ${t.years}, ${monthDiff + 12} ${t.months}`
+      return `${yearDiff - 1} ${t.years}, ${monthDiff + 12} ${t.monthss}`
     }
 
-    return `${yearDiff} ${t.years}, ${monthDiff} ${t.months}`
+    return `${yearDiff} ${t.years}, ${monthDiff} ${t.monthss}`
   }
 
   const handleAddWorkLog = () => {
@@ -374,13 +337,27 @@ export default function EmployeesPage() {
     setIsPayDialogOpen(false)
   }
 
-  // Filtering work logs based on employee selection
-  const filteredWorkLogs =
-    selectedEmployeeFilter === "all"
-      ? workLogs
-      : workLogs.filter((log) => log.employeeId === selectedEmployeeFilter)
 
+  let filteredLogs = workLogs;
+  if (selectedEmployeeFilter !== "all") {
+    filteredLogs = filteredLogs.filter((log) => log.employeeId === selectedEmployeeFilter);
+  }
+  if (workLogStatusFilter !== "all") {
+    if (workLogStatusFilter === "paid") {
+      filteredLogs = filteredLogs.filter((log) => log.amountPaid === log.totalAmount);
+    } else if (workLogStatusFilter === "pending") {
+      filteredLogs = filteredLogs.filter((log) => log.amountPaid < log.totalAmount);
+    }
+  }
+  filteredLogs.sort((a, b) =>
+    workLogSortOrder === "desc"
+      ? new Date(b.date).getTime() - new Date(a.date).getTime()
+      : new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  const startIndex = (currentWorkLogPage - 1) * workLogsPerPage;
+  const paginatedWorkLogs = filteredLogs.slice(startIndex, startIndex + workLogsPerPage);
   
+
 
   return (
     <div className="space-y-6">
@@ -621,8 +598,14 @@ export default function EmployeesPage() {
           <h2 className="text-2xl font-bold tracking-tight">Καταγραφή Εργασίας</h2>
           <Button onClick={handleAddWorkLog}>Προσθήκη Ωρών</Button>
         </div>
-        <div className="mb-4">
-          <Select value={selectedEmployeeFilter} onValueChange={(value) => setSelectedEmployeeFilter(value)}>
+        <div className="flex gap-4 mb-4">
+          <Select
+            value={selectedEmployeeFilter}
+            onValueChange={(value) => { 
+              setSelectedEmployeeFilter(value); 
+              setCurrentWorkLogPage(1); 
+            }}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Filter by Employee" />
             </SelectTrigger>
@@ -633,6 +616,39 @@ export default function EmployeesPage() {
                   {emp.firstName} {emp.lastName}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          {/* Status Filter */}
+          <Select
+            value={workLogStatusFilter}
+            onValueChange={(value) => { 
+              setWorkLogStatusFilter(value); 
+              setCurrentWorkLogPage(1); 
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Filter by Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Όλα</SelectItem>
+              <SelectItem value="paid">Πληρωμένη</SelectItem>
+              <SelectItem value="pending">Εκκρεμή</SelectItem>
+            </SelectContent>
+          </Select>
+          {/* Sort Order Filter */}
+          <Select
+            value={workLogSortOrder}
+            onValueChange={(value) => { 
+              setWorkLogSortOrder(value); 
+              setCurrentWorkLogPage(1); 
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Sort by Date" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc">Νεότερα</SelectItem>
+              <SelectItem value="asc">Παλαιότερα</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -662,8 +678,8 @@ export default function EmployeesPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredWorkLogs.map((log) => {
-                const employee = employees.find((emp) => emp.id === log.employeeId)
+              {paginatedWorkLogs.map((log) => {
+                const employee = employees.find((emp) => emp.id === log.employeeId);
                 return (
                   <tr key={log.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -672,12 +688,8 @@ export default function EmployeesPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {getWorkplaceName(log.workplaceId)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {log.date}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {log.hoursWorked}
-                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{log.date}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{log.hoursWorked}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {`${log.amountPaid} / ${log.totalAmount}`}
                       {log.amountPaid === log.totalAmount ? (
@@ -686,9 +698,7 @@ export default function EmployeesPage() {
                         <Badge className="bg-yellow-100 text-yellow-800 ml-2">Εκκρεμή</Badge>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {log.notes}
-                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{log.notes}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" onClick={() => handleEditWorkLog(log)}>
@@ -705,10 +715,29 @@ export default function EmployeesPage() {
                       </div>
                     </td>
                   </tr>
-                )
+                );
               })}
             </tbody>
           </table>
+          <div className="flex justify-center items-center mt-4 space-x-4">
+            <Button
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
+              disabled={currentWorkLogPage === 1}
+              onClick={() => setCurrentWorkLogPage(currentWorkLogPage - 1)}
+            >
+              ←
+            </Button>
+            <span className="text-sm font-medium">
+              {currentWorkLogPage} / {Math.ceil(filteredLogs.length / workLogsPerPage)}
+            </span>
+            <Button
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
+              disabled={currentWorkLogPage === Math.ceil(filteredLogs.length / workLogsPerPage) || Math.ceil(filteredLogs.length / workLogsPerPage) === 0}
+              onClick={() => setCurrentWorkLogPage(currentWorkLogPage + 1)}
+            >
+              →
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -831,85 +860,6 @@ export default function EmployeesPage() {
                 {t.cancel}
               </Button>
               <Button type="submit">{isEditing ? t.update : t.add}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={isPerformanceDialogOpen} onOpenChange={setIsPerformanceDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Επεξεργασία Αποδόσεων</DialogTitle>
-          </DialogHeader>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              // Save the edited traits
-              setPerformanceTraits(editingPerformanceTraits);
-              if (selectedEmployee) {
-                setLocalData(`performanceTraits_${selectedEmployee.id}`, editingPerformanceTraits);
-              }
-              setIsPerformanceDialogOpen(false);
-            }}
-          >
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="prod">Productivity</Label>
-                <Input
-                  id="prod"
-                  value={editingPerformanceTraits.productivity}
-                  onChange={(e) =>
-                    setEditingPerformanceTraits({
-                      ...editingPerformanceTraits,
-                      productivity: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="att">Attendance</Label>
-                <Input
-                  id="att"
-                  value={editingPerformanceTraits.attendance}
-                  onChange={(e) =>
-                    setEditingPerformanceTraits({
-                      ...editingPerformanceTraits,
-                      attendance: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="team">Teamwork</Label>
-                <Input
-                  id="team"
-                  value={editingPerformanceTraits.teamwork}
-                  onChange={(e) =>
-                    setEditingPerformanceTraits({
-                      ...editingPerformanceTraits,
-                      teamwork: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="qual">Quality</Label>
-                <Input
-                  id="qual"
-                  value={editingPerformanceTraits.quality}
-                  onChange={(e) =>
-                    setEditingPerformanceTraits({
-                      ...editingPerformanceTraits,
-                      quality: e.target.value,
-                    })
-                  }
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsPerformanceDialogOpen(false)}>
-                Ακύρωση
-              </Button>
-              <Button type="submit">Αποθήκευση</Button>
             </DialogFooter>
           </form>
         </DialogContent>

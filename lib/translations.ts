@@ -85,7 +85,6 @@ export const translations = {
   // Modules
   manageSuppliers: "Διαχείριση προμηθευτών και σχέσεων με vendors",
   manageWorkplaces: "Διαχείριση γραφείων και χώρων εργασίας",
-  manageCustomers: "Διαχείριση πελατών και δεδομένων",
   manageEmployees: "Διαχείριση μελών ομάδας και προσωπικού",
   total: "σύνολο",
 
@@ -210,10 +209,9 @@ export const translations = {
 
   // Common Form Fields
   selectDepartment: "Επιλέξτε τμήμα",
-  selectWorkplace: "Επιλέξτε χώρο εργασίας",
   notSpecified: "Δεν έχει οριστεί",
   years: "έτη",
-  months: "μήνες",
+  monthss: "μήνες",
   issued: "Εκδόθηκε",
 }
 

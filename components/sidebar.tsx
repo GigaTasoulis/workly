@@ -8,6 +8,7 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { translations as t } from "@/lib/translations"
 import ThemeToggleButton from "@/components/ThemeToggleButton"
+import { ExportDataButton } from "./ExportDataButton"
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -87,6 +88,9 @@ export function Sidebar() {
         </nav>
         <div className="mt-auto p-4">
           <ThemeToggleButton />
+        </div>
+        <div className="mt-auto p-4">
+          <ExportDataButton />
         </div>
       </div>
     </>

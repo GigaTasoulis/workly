@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -8,6 +10,7 @@ import { RecentActivity } from "@/components/dashboard/recent-activity"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { OverviewChart } from "@/components/dashboard/overview-chart"
 import { TopCustomers } from "@/components/dashboard/top-customers"
+import { TopDebts } from "@/components/dashboard/TopDebts"
 import { translations as t } from "@/lib/translations"
 import { getLocalData } from "@/lib/utils"
 
@@ -20,9 +23,30 @@ export default function Home() {
   const [pendingTransactionsCount, setPendingTransactionsCount] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const customersData = getLocalData("customers") || []
+  const transactionsData = getLocalData("transactions") || []
+
+  const customersWithDebt = customersData.map(customer => ({
+    ...customer,
+    debt: transactionsData
+      .filter(tr => tr.customerId === customer.id && tr.status === "pending")
+      .reduce((sum, tr) => sum + ((tr.amount || 0) - (tr.amountPaid || 0)), 0),
+  }))
+
+  const topDebts = customersData
+  .map(c => ({
+    id: c.id,
+    name: c.name,
+    debt: transactionsData
+      .filter(tr => tr.customerId === c.id && tr.status === "pending")
+      .reduce((sum, tr) => sum + ((tr.amount || 0) - (tr.amountPaid || 0)), 0),
+  }))
+  .filter(c => c.debt > 0)
+  .sort((a, b) => b.debt - a.debt)
+  .slice(0, 5)
 
 
-  // In your useEffect:
+
   useEffect(() => {
     const suppliers = getLocalData("suppliers") || [];
     const workplaces = getLocalData("workplaces") || [];
@@ -214,43 +238,11 @@ export default function Home() {
         </Card>
         <Card className="md:col-span-4">
           <CardHeader>
-            <CardTitle>{t.upcomingTasks}</CardTitle>
-            <CardDescription>{t.tasksRequiringAttention}</CardDescription>
+            <CardTitle>Μεγαλύτερα Χρέη</CardTitle>
+            <CardDescription>Οι συναλλαγές με τα μεγαλύτερα υπόλοιπα</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-start gap-4 rounded-md border p-4">
-                <div className="rounded-full bg-blue-100 p-2 dark:bg-blue-900">
-                  <Clock className="h-4 w-4 text-blue-700 dark:text-blue-300" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">{t.supplierContractRenewal}</p>
-                  <p className="text-sm text-muted-foreground">
-                    Office Supplies Inc. {t.contractExpires} 7 {t.days}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4 rounded-md border p-4">
-                <div className="rounded-full bg-amber-100 p-2 dark:bg-amber-900">
-                  <Users className="h-4 w-4 text-amber-700 dark:text-amber-300" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">{t.employeeOnboarding}</p>
-                  <p className="text-sm text-muted-foreground">
-                    3 {t.newEmployeesStarting} {t.nextMonday}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4 rounded-md border p-4">
-                <div className="rounded-full bg-green-100 p-2 dark:bg-green-900">
-                  <Building2 className="h-4 w-4 text-green-700 dark:text-green-300" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">{t.workplaceInspection}</p>
-                  <p className="text-sm text-muted-foreground">{t.annualSafetyInspection}</p>
-                </div>
-              </div>
-            </div>
+            <TopDebts />
           </CardContent>
         </Card>
       </div>

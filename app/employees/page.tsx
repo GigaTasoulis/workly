@@ -120,6 +120,11 @@ export default function EmployeesPage() {
   const [isPayDialogOpen, setIsPayDialogOpen] = useState(false)
   const [workLogToPay, setWorkLogToPay] = useState<WorkLog | null>(null)
   const [paymentAmount, setPaymentAmount] = useState<string>("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const logsPerPage = 3
+  const [sortOrder, setSortOrder] = useState<string>("desc") 
+  const [filterStatus, setFilterStatus] = useState<string>("all") 
+
 
   const { toast } = useToast()
 
@@ -426,7 +431,7 @@ export default function EmployeesPage() {
                   <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="details">{t.details}</TabsTrigger>
                     <TabsTrigger value="employment">{t.employmentDetails}</TabsTrigger>
-                    <TabsTrigger value="performance">{t.performance}</TabsTrigger>
+                    <TabsTrigger value="history">History</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="details" className="space-y-4 pt-4">
@@ -503,30 +508,93 @@ export default function EmployeesPage() {
                       </div>
                     </div>
                   </TabsContent>
-
-                  <TabsContent value="performance" className="space-y-4 pt-4">
+                  <TabsContent value="history" className="space-y-4 pt-4">
                     {selectedEmployee ? (
-                      <div className="space-y-4">
-                        {Object.entries(performanceTraits).map(([key, trait]) => (
-                          <div key={key} className="flex justify-between">
-                            <h3 className="text-sm font-medium">
-                              {key === "productivity" && t.productivity}
-                              {key === "attendance" && t.attendance}
-                              {key === "teamwork" && t.teamwork}
-                              {key === "quality" && t.quality}
-                            </h3>
-                            <span className="text-sm text-muted-foreground">{trait}</span>
-                          </div>
-                        ))}
-                        <Button onClick={() => { 
-                          console.log("Editing traits clicked");
-                          setIsPerformanceDialogOpen(true);
-                        }} size="sm">
-                          Επεξεργασία
-                        </Button>
+                      <div>
+                        {/* Filter and Paginate Logs */}
+                        {(() => {
+                          // Filter by employee and status
+                          let logs = workLogs.filter(log => log.employeeId === selectedEmployee.id)
+                          if (filterStatus === "paid") {
+                            logs = logs.filter(log => log.amountPaid === log.totalAmount)
+                          } else if (filterStatus === "pending") {
+                            logs = logs.filter(log => log.amountPaid < log.totalAmount)
+                          }
+
+                          logs.sort((a, b) =>
+                            sortOrder === "desc"
+                              ? new Date(b.date).getTime() - new Date(a.date).getTime()
+                              : new Date(a.date).getTime() - new Date(b.date).getTime()
+                          )
+
+                          const totalPages = Math.ceil(logs.length / logsPerPage)
+                          const startIndex = (currentPage - 1) * logsPerPage
+                          const paginatedLogs = logs.slice(startIndex, startIndex + logsPerPage)
+
+                          return (
+                            <div className="space-y-4">
+                              <div className="flex gap-4 mb-4">
+                                <Select value={sortOrder} onValueChange={(value) => { setSortOrder(value); setCurrentPage(1) }}>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Sort by Date" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="desc">Most Recent</SelectItem>
+                                    <SelectItem value="asc">Oldest</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <Select value={filterStatus} onValueChange={(value) => { setFilterStatus(value); setCurrentPage(1) }}>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Filter by Status" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="all">All</SelectItem>
+                                    <SelectItem value="paid">Paid</SelectItem>
+                                    <SelectItem value="pending">Pending</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              {paginatedLogs.map(log => (
+                                <div key={log.id} className="border p-2 rounded-md">
+                                  <p><strong>Date:</strong> {log.date}</p>
+                                  <p><strong>Hours:</strong> {log.hoursWorked}</p>
+                                  <p><strong>Workplace:</strong> {getWorkplaceName(log.workplaceId)}</p>
+                                  <p>
+                                    <strong>To Be Paid:</strong> {`${log.amountPaid} / ${log.totalAmount}`}
+                                    {log.amountPaid === log.totalAmount ? (
+                                      <Badge className="bg-green-100 text-green-800 ml-2">Paid</Badge>
+                                    ) : (
+                                      <Badge className="bg-yellow-100 text-yellow-800 ml-2">Pending</Badge>
+                                    )}
+                                  </p>
+                                </div>
+                              ))}
+                              {/* Pagination Controls */}
+                              <div className="flex justify-center items-center mt-4 space-x-4">
+                                <Button
+                                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
+                                  disabled={currentPage === 1}
+                                  onClick={() => setCurrentPage(currentPage - 1)}
+                                >
+                                  ←
+                                </Button>
+                                <span className="text-sm font-medium">
+                                  {currentPage} / {totalPages}
+                                </span>
+                                <Button
+                                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
+                                  disabled={currentPage === totalPages || totalPages === 0}
+                                  onClick={() => setCurrentPage(currentPage + 1)}
+                                >
+                                  →
+                                </Button>
+                              </div>
+                            </div>
+                          )
+                        })()}
                       </div>
                     ) : (
-                      <p>No performance metrics available.</p>
+                      <p>No employee selected.</p>
                     )}
                   </TabsContent>
                 </Tabs>
@@ -584,7 +652,7 @@ export default function EmployeesPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Ωρες Εργασιας
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">To Be Paid</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Πληρωμη</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Σημειωσεις
                 </th>

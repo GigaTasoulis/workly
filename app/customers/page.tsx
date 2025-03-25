@@ -42,6 +42,19 @@ interface Transaction {
   notes: string
 }
 
+interface Payment {
+  id: string;
+  transactionId: string;
+  customerId: string;
+  productName: string;
+  paymentAmount: number;
+  paymentDate: string; // e.g., "2025-03-25"
+  notes?: string;
+}
+
+
+
+
 const initialCustomer: Customer = {
   id: "",
   name: "",
@@ -79,13 +92,22 @@ export default function CustomersPage() {
   const [paymentAmount, setPaymentAmount] = useState<number>(0)
   const [isTransactionEditing, setIsTransactionEditing] = useState(false);
   const [transactionFilter, setTransactionFilter] = useState<"all" | "paid" | "pending">("all");
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [paymentHistoryCustomerFilter, setPaymentHistoryCustomerFilter] = useState<string>("all");
+  const [paymentHistorySortOrder, setPaymentHistorySortOrder] = useState<string>("desc");
+  const [paymentNotes, setPaymentNotes] = useState<string>("");
+
+
+
 
 
   useEffect(() => {
     const customersData = getLocalData("customers") || [];
     const transactionsData = getLocalData("transactions") || [];
+    const storedPayments = getLocalData("payments") || [];
     setCustomers(customersData);
     setTransactions(transactionsData);
+    setPayments(storedPayments);
   }, []);
 
   const columns = [
@@ -96,7 +118,7 @@ export default function CustomersPage() {
     { key: "phone", label: t.phone },
     { key: "afm", label: "ΑΦΜ" },
     { key: "tractor", label: "Τρακτέρ" },
-    { key: "debt", label: "Χρέη" },
+    { key: "debt", label: "Όφειλές" },
   ]
 
   const handleAddNew = () => {
@@ -106,10 +128,21 @@ export default function CustomersPage() {
   }
 
   const handlePaymentSubmit = () => {
-    // Calculate the remaining balance:
+    const newPayment: Payment = {
+      id: generateId(),
+      transactionId: currentTransaction.id,
+      customerId: currentTransaction.customerId,
+      productName: currentTransaction.productName,
+      paymentAmount: paymentAmount, 
+      paymentDate: new Date().toISOString().split("T")[0],
+      notes: paymentNotes,
+    };
+    const updatedPayments = [...payments, newPayment];
+    setPayments(updatedPayments);
+    setLocalData("payments", updatedPayments);
+
     const remaining = Number(currentTransaction.amount) - Number(currentTransaction.amountPaid);
     
-    // Validate the payment amount:
     if (paymentAmount <= 0) {
       toast({
         title: "Error",
@@ -366,8 +399,8 @@ export default function CustomersPage() {
 
   const renderTransactionsTab = () => (
     <TabsContent value="transactions" className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div>
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex flex-col">
           <h3 className="text-sm font-medium">{t.transactionHistory}</h3>
           <p className="text-sm text-muted-foreground">
             {t.totalSpent}: €{getTotalSpent(selectedCustomer?.id || "").toLocaleString()}
@@ -377,16 +410,31 @@ export default function CustomersPage() {
           {t.addTransaction}
         </Button>
       </div>
+      <div className="mb-4">
+        <Select
+          value={transactionFilter}
+          onValueChange={(value: "all" | "paid" | "pending") => setTransactionFilter(value)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Filter by Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Όλες</SelectItem>
+            <SelectItem value="paid">Πληρωμένες</SelectItem>
+            <SelectItem value="pending">Εκκρεμείς</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
       <TransactionList
         transactions={getCustomerTransactions(selectedCustomer?.id || "")}
         onEdit={handleEditTransaction}
         onDelete={handleDeleteTransaction}
         onPayment={handleOpenPaymentDialog}
-        getStatusColor={getStatusColor} 
+        getStatusColor={getStatusColor}
       />
     </TabsContent>
   );
-
+  
   const renderCustomerCard = () => (
     <Card>
       <CardHeader className="pb-3">
@@ -454,20 +502,29 @@ export default function CustomersPage() {
             )}
 
             <div className="flex space-x-2 pt-4">
-              <Button variant="outline" size="sm" onClick={() => handleEdit(selectedCustomer)} className="flex-1">
-                Επεξεργασία
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (selectedCustomer) {
+                    handleEdit(selectedCustomer)
+                  }
+                }}
+                className="flex-1"
+              >
+                Edit
               </Button>
               <Button
                 variant="destructive"
                 size="sm"
                 onClick={() => {
-                  if (confirm("Are you sure you want to delete this customer?")) {
+                  if (selectedCustomer && confirm("Are you sure you want to delete this employee?")) {
                     handleDelete(selectedCustomer.id)
                   }
                 }}
                 className="flex-1"
               >
-                Διαγραφή
+                Delete
               </Button>
             </div>
           </TabsContent>
@@ -624,21 +681,21 @@ export default function CustomersPage() {
             }}
           >
             <div className="grid gap-4 py-4">
-              <div>
+              <div className="space-y-2">
                 <p>
-                  <strong>Προιόν:</strong> {currentTransaction.productName}
+                  <strong>Προϊόν:</strong> {currentTransaction.productName}
                 </p>
                 <p>
                   <strong>Συνολικό ποσό:</strong>{" "}
-                  €{ (Number(currentTransaction.amount) || 0).toLocaleString() }
+                  €{(Number(currentTransaction.amount) || 0).toLocaleString()}
                 </p>
                 <p>
                   <strong>Πληρωμένο ποσό:</strong>{" "}
-                  €{ (Number(currentTransaction.amountPaid) || 0).toLocaleString() }
+                  €{(Number(currentTransaction.amountPaid) || 0).toLocaleString()}
                 </p>
                 <p>
                   <strong>Υπόλοιπο:</strong>{" "}
-                  €{ (Number(currentTransaction.amount) - Number(currentTransaction.amountPaid) || 0).toLocaleString() }
+                  €{(Number(currentTransaction.amount) - Number(currentTransaction.amountPaid) || 0).toLocaleString()}
                 </p>
               </div>
               <div className="space-y-2">
@@ -650,8 +707,20 @@ export default function CustomersPage() {
                   max={currentTransaction.amount - currentTransaction.amountPaid}
                   step="0.01"
                   value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(Number.parseFloat(e.target.value) || 0)}
+                  onChange={(e) =>
+                    setPaymentAmount(Number.parseFloat(e.target.value) || 0)
+                  }
                   required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="paymentNotes">Σημειώσεις (προαιρετικά)</Label>
+                <Textarea
+                  id="paymentNotes"
+                  placeholder="Προσθέστε σημειώσεις για αυτή την πληρωμή (προαιρετικά)"
+                  rows={3}
+                  value={paymentNotes}
+                  onChange={(e) => setPaymentNotes(e.target.value)}
                 />
               </div>
             </div>
@@ -783,7 +852,100 @@ export default function CustomersPage() {
           </form>
         </DialogContent>
       </Dialog>
-
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold tracking-tight">Ιστορικό Πληρωμών</h2>
+        <div className="flex gap-4 mb-4">
+          {/* Customer Filter */}
+          <Select
+            value={paymentHistoryCustomerFilter}
+            onValueChange={(value) => setPaymentHistoryCustomerFilter(value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Φιλτράρισμα κατά Πελάτη" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Όλοι</SelectItem>
+              {customers.map((cust) => (
+                <SelectItem key={cust.id} value={cust.id}>
+                  {cust.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {/* Sort Order Filter */}
+          <Select
+            value={paymentHistorySortOrder}
+            onValueChange={(value) => setPaymentHistorySortOrder(value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Ταξινόμηση κατά Ημερομηνία" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc">Νεότερες</SelectItem>
+              <SelectItem value="asc">Παλαιότερες</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {(() => {
+          // Filter payments by customer if not "all"
+          let filteredPayments = payments;
+          if (paymentHistoryCustomerFilter !== "all") {
+            filteredPayments = filteredPayments.filter(
+              (p) => p.customerId === paymentHistoryCustomerFilter
+            );
+          }
+          // Sort payments by date
+          filteredPayments.sort((a, b) =>
+            paymentHistorySortOrder === "desc"
+              ? new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime()
+              : new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime()
+          );
+          return (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Πελάτης</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Συναλλαγή</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Προϊόν</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ποσό Πληρωμής</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ημ/νία</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Σημειώσεις</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredPayments.map((p) => {
+                    const cust = customers.find((c) => c.id === p.customerId);
+                    const transactionForPayment = transactions.find((tr) => tr.id === p.transactionId);
+                    return (
+                      <tr key={p.id}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {cust ? cust.name : "Unknown"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {transactionForPayment ? transactionForPayment.productName : "N/A"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {p.productName}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          €{p.paymentAmount.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {p.paymentDate}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {p.notes || "-"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+      </div>
     </div>
   )
 }

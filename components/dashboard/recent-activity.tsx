@@ -33,7 +33,7 @@ export function RecentActivity() {
 
   return (
     <div className="space-y-4">
-      {activities.map((activity: any) => (
+      {activities.slice(0, 5).map((activity: any) => (
         <div key={activity.id} className="flex items-center gap-4">
           <div className={`rounded-full p-2 ${activity.iconColor}`}>
             {iconMap[activity.iconKey] || null}
@@ -53,5 +53,5 @@ export function RecentActivity() {
         </div>
       ))}
     </div>
-  )
+  );  
 }

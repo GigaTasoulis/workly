@@ -431,7 +431,7 @@ export default function EmployeesPage() {
                   <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="details">{t.details}</TabsTrigger>
                     <TabsTrigger value="employment">{t.employmentDetails}</TabsTrigger>
-                    <TabsTrigger value="history">History</TabsTrigger>
+                    <TabsTrigger value="history">Ιστορικό</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="details" className="space-y-4 pt-4">
@@ -539,8 +539,8 @@ export default function EmployeesPage() {
                                     <SelectValue placeholder="Sort by Date" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="desc">Most Recent</SelectItem>
-                                    <SelectItem value="asc">Oldest</SelectItem>
+                                    <SelectItem value="desc">Πιο πρόσφατες</SelectItem>
+                                    <SelectItem value="asc">Παλαιότερες</SelectItem>
                                   </SelectContent>
                                 </Select>
                                 <Select value={filterStatus} onValueChange={(value) => { setFilterStatus(value); setCurrentPage(1) }}>
@@ -548,23 +548,23 @@ export default function EmployeesPage() {
                                     <SelectValue placeholder="Filter by Status" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="all">All</SelectItem>
-                                    <SelectItem value="paid">Paid</SelectItem>
-                                    <SelectItem value="pending">Pending</SelectItem>
+                                    <SelectItem value="all">Όλες</SelectItem>
+                                    <SelectItem value="paid">Πληρωμένες</SelectItem>
+                                    <SelectItem value="pending">Εκκρεμείς</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
                               {paginatedLogs.map(log => (
                                 <div key={log.id} className="border p-2 rounded-md">
-                                  <p><strong>Date:</strong> {log.date}</p>
-                                  <p><strong>Hours:</strong> {log.hoursWorked}</p>
-                                  <p><strong>Workplace:</strong> {getWorkplaceName(log.workplaceId)}</p>
+                                  <p><strong>Ημ/νία:</strong> {log.date}</p>
+                                  <p><strong>Ώρες:</strong> {log.hoursWorked}</p>
+                                  <p><strong>Χώρος Εργασίας:</strong> {getWorkplaceName(log.workplaceId)}</p>
                                   <p>
-                                    <strong>To Be Paid:</strong> {`${log.amountPaid} / ${log.totalAmount}`}
+                                    <strong>Πληρωμή:</strong> {`${log.amountPaid} / ${log.totalAmount}`}
                                     {log.amountPaid === log.totalAmount ? (
-                                      <Badge className="bg-green-100 text-green-800 ml-2">Paid</Badge>
+                                      <Badge className="bg-green-100 text-green-800 ml-2">Πληρωμένη</Badge>
                                     ) : (
-                                      <Badge className="bg-yellow-100 text-yellow-800 ml-2">Pending</Badge>
+                                      <Badge className="bg-yellow-100 text-yellow-800 ml-2">Εκκρεμή</Badge>
                                     )}
                                   </p>
                                 </div>
@@ -594,7 +594,7 @@ export default function EmployeesPage() {
                         })()}
                       </div>
                     ) : (
-                      <p>No employee selected.</p>
+                      <p>Δεν έχει επιλεχθεί εργαζόμενος.</p>
                     )}
                   </TabsContent>
                 </Tabs>
@@ -627,7 +627,7 @@ export default function EmployeesPage() {
               <SelectValue placeholder="Filter by Employee" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="all">Όλοι</SelectItem>
               {employees.map((emp) => (
                 <SelectItem key={emp.id} value={emp.id}>
                   {emp.firstName} {emp.lastName}
@@ -681,9 +681,9 @@ export default function EmployeesPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {`${log.amountPaid} / ${log.totalAmount}`}
                       {log.amountPaid === log.totalAmount ? (
-                        <Badge className="bg-green-100 text-green-800 ml-2">Paid</Badge>
+                        <Badge className="bg-green-100 text-green-800 ml-2">Πληρωμένη</Badge>
                       ) : (
-                        <Badge className="bg-yellow-100 text-yellow-800 ml-2">Pending</Badge>
+                        <Badge className="bg-yellow-100 text-yellow-800 ml-2">Εκκρεμή</Badge>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -692,16 +692,16 @@ export default function EmployeesPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" onClick={() => handleEditWorkLog(log)}>
-                          Edit
-                        </Button>
-                        <Button size="sm" variant="destructive" onClick={() => handleDeleteWorkLog(log.id)}>
-                          Delete
+                          Επεξεργασία
                         </Button>
                         {(log.totalAmount - log.amountPaid) > 0 && (
                           <Button size="sm" variant="secondary" onClick={() => handleOpenPayDialog(log)}>
-                            Pay
+                            Πληρωμή
                           </Button>
                         )}
+                        <Button size="sm" variant="destructive" onClick={() => handleDeleteWorkLog(log.id)}>
+                          Διαγραφή
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -917,12 +917,12 @@ export default function EmployeesPage() {
       <Dialog open={isWorkLogDialogOpen} onOpenChange={setIsWorkLogDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>{isEditingWorkLog ? "Edit Work Log" : "Add Work Log"}</DialogTitle>
+            <DialogTitle>{isEditingWorkLog ? "Επεξεργασία Καταγραφής" : "Προσθήκη Καταγραφής"}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleWorkLogSubmit}>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="worklog-employee">Employee</Label>
+                <Label htmlFor="worklog-employee">Εργαζόμενος</Label>
                 <Select
                   value={currentWorkLog.employeeId}
                   onValueChange={(value) =>
@@ -930,7 +930,7 @@ export default function EmployeesPage() {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select Employee" />
+                    <SelectValue placeholder="Επιλογή Εργαζόμενου" />
                   </SelectTrigger>
                   <SelectContent>
                     {employees.map((emp) => (
@@ -943,7 +943,7 @@ export default function EmployeesPage() {
               </div>
               {/* Replace free-text location with workplace selection */}
               <div className="space-y-2">
-                <Label htmlFor="worklog-workplace">Workplace</Label>
+                <Label htmlFor="worklog-workplace">Χώρος Εργασίας</Label>
                 <Select
                   value={currentWorkLog.workplaceId}
                   onValueChange={(value) =>
@@ -951,7 +951,7 @@ export default function EmployeesPage() {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select Workplace" />
+                    <SelectValue placeholder="Επιλογή Χώρου Εργασίας" />
                   </SelectTrigger>
                   <SelectContent>
                     {workplaces.map((wp) => (
@@ -963,7 +963,7 @@ export default function EmployeesPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="worklog-date">Date</Label>
+                <Label htmlFor="worklog-date">Ημ/νία</Label>
                 <Input
                   id="worklog-date"
                   type="date"
@@ -974,7 +974,7 @@ export default function EmployeesPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="worklog-hours">Hours Worked</Label>
+                <Label htmlFor="worklog-hours">Ώρες Εργασίας</Label>
                 <Input
                   id="worklog-hours"
                   type="number"
@@ -985,7 +985,7 @@ export default function EmployeesPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="worklog-total-amount">Total Amount (€)</Label>
+                <Label htmlFor="worklog-total-amount">Συνολικό Ποσό (€)</Label>
                 <Input
                   id="worklog-total-amount"
                   type="number"
@@ -996,7 +996,7 @@ export default function EmployeesPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="worklog-notes">Notes</Label>
+                <Label htmlFor="worklog-notes">Σημειώσεις</Label>
                 <Textarea
                   id="worklog-notes"
                   value={currentWorkLog.notes}
@@ -1009,7 +1009,7 @@ export default function EmployeesPage() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsWorkLogDialogOpen(false)}>
-                Cancel
+                Ακύρωση
               </Button>
               <Button type="submit">{isEditingWorkLog ? "Update" : "Add"}</Button>
             </DialogFooter>
@@ -1019,23 +1019,23 @@ export default function EmployeesPage() {
       <Dialog open={isPayDialogOpen} onOpenChange={setIsPayDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Pay Work Log</DialogTitle>
+            <DialogTitle>Πληρωμή</DialogTitle>
           </DialogHeader>
           <form onSubmit={handlePaySubmit}>
             <div className="grid gap-4 py-4">
               {workLogToPay && (
                 <>
                   <div>
-                    <p>Remaining Amount: {workLogToPay.totalAmount - workLogToPay.amountPaid}</p>
+                    <p>Υπολοιπόμενο ποσό: {workLogToPay.totalAmount - workLogToPay.amountPaid}</p>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="payment-amount">Payment Amount (€)</Label>
+                    <Label htmlFor="payment-amount">Ποσό πληρωμής (€)</Label>
                     <Input
                       id="payment-amount"
                       type="number"
                       value={paymentAmount}
                       onChange={(e) => setPaymentAmount(e.target.value)}
-                      placeholder={`Enter amount (max €${workLogToPay.totalAmount - workLogToPay.amountPaid})`}
+                      placeholder={`Εισάγετε ποσό ( μέγιστο €${workLogToPay.totalAmount - workLogToPay.amountPaid} )`}
                     />
                   </div>
                 </>
@@ -1043,9 +1043,9 @@ export default function EmployeesPage() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsPayDialogOpen(false)}>
-                Cancel
+                Ακύρωση
               </Button>
-              <Button type="submit">Submit Payment</Button>
+              <Button type="submit">Υποβολή Πληρωμής</Button>
             </DialogFooter>
           </form>
         </DialogContent>

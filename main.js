@@ -13,14 +13,13 @@ expressApp.listen(PORT, () => {
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 800,
-    height: 600,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     }
   });
+  win.maximize();
 
   // Load the static export from our local server
   win.loadURL(`http://localhost:${PORT}/index.html`);

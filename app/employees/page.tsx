@@ -281,15 +281,15 @@ export default function EmployeesPage() {
         log.id === currentWorkLog.id ? currentWorkLog : log
       )
       toast({
-        title: "Work Log updated",
-        description: "Work log updated successfully.",
+        title: "Καταγραφή εργασίας ανανεώθηκε",
+        description: "Καταγραφή εργασίας ανανεώθηκε επιτυχώς.",
       })
     } else {
       const newLog = { ...currentWorkLog, id: generateId() }
       updatedLogs = [...workLogs, newLog]
       toast({
-        title: "Work Log added",
-        description: "Work log added successfully.",
+        title: "Καταγραφή εργασίας προστέθηκε!",
+        description: "Καταγραφή εργασίας προστέθηκε επιτυχώς.",
       })
     }
     setWorkLogs(updatedLogs)
@@ -973,7 +973,7 @@ export default function EmployeesPage() {
               <Button type="button" variant="outline" onClick={() => setIsWorkLogDialogOpen(false)}>
                 Ακύρωση
               </Button>
-              <Button type="submit">{isEditingWorkLog ? "Update" : "Add"}</Button>
+              <Button type="submit">{isEditingWorkLog ? "Ενημέρωση" : "Προσθήκη"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

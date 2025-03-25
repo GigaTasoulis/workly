@@ -41,6 +41,8 @@ interface WorkLog {
   date: string
   hoursWorked: string
   notes: string
+  totalAmount: number
+  amountPaid: number
 }
 
 
@@ -109,10 +111,15 @@ export default function EmployeesPage() {
     date: "",
     hoursWorked: "",
     notes: "",
+    totalAmount: 0,
+    amountPaid: 0,
   })
   const [isWorkLogDialogOpen, setIsWorkLogDialogOpen] = useState(false)
   const [isEditingWorkLog, setIsEditingWorkLog] = useState(false)
   const [selectedEmployeeFilter, setSelectedEmployeeFilter] = useState<string>("all")
+  const [isPayDialogOpen, setIsPayDialogOpen] = useState(false)
+  const [workLogToPay, setWorkLogToPay] = useState<WorkLog | null>(null)
+  const [paymentAmount, setPaymentAmount] = useState<string>("")
 
   const { toast } = useToast()
 
@@ -265,6 +272,8 @@ export default function EmployeesPage() {
       date: "",
       hoursWorked: "",
       notes: "",
+      totalAmount: 0,
+      amountPaid: 0,
     })
     setIsEditingWorkLog(false)
     setIsWorkLogDialogOpen(true)
@@ -318,6 +327,46 @@ export default function EmployeesPage() {
     setWorkLogs(updatedLogs)
     setLocalData("worklogs", updatedLogs)
     setIsWorkLogDialogOpen(false)
+  }
+
+  const handleOpenPayDialog = (log: WorkLog) => {
+    setWorkLogToPay(log)
+    setPaymentAmount("")
+    setIsPayDialogOpen(true)
+  }
+  
+  // Handler for submitting a payment
+  const handlePaySubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!workLogToPay) return
+    const remaining = workLogToPay.totalAmount - workLogToPay.amountPaid
+    const payment = parseFloat(paymentAmount)
+    if (isNaN(payment) || payment <= 0) {
+      toast({
+        title: "Error",
+        description: "Enter a valid payment amount.",
+        variant: "destructive",
+      })
+      return
+    }
+    if (payment > remaining) {
+      toast({
+        title: "Error",
+        description: `Payment cannot exceed the remaining amount (€${remaining}).`,
+        variant: "destructive",
+      })
+      return
+    }
+    // Update work log payment
+    const updatedLog = { ...workLogToPay, amountPaid: workLogToPay.amountPaid + payment }
+    const updatedLogs = workLogs.map((log) => log.id === updatedLog.id ? updatedLog : log)
+    setWorkLogs(updatedLogs)
+    setLocalData("worklogs", updatedLogs)
+    toast({
+      title: "Payment recorded",
+      description: `€${payment} payment recorded.`,
+    })
+    setIsPayDialogOpen(false)
   }
 
   // Filtering work logs based on employee selection
@@ -535,6 +584,7 @@ export default function EmployeesPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Ωρες Εργασιας
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">To Be Paid</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Σημειωσεις
                 </th>
@@ -561,6 +611,14 @@ export default function EmployeesPage() {
                       {log.hoursWorked}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {`${log.amountPaid} / ${log.totalAmount}`}
+                      {log.amountPaid === log.totalAmount ? (
+                        <Badge className="bg-green-100 text-green-800 ml-2">Paid</Badge>
+                      ) : (
+                        <Badge className="bg-yellow-100 text-yellow-800 ml-2">Pending</Badge>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {log.notes}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -571,6 +629,11 @@ export default function EmployeesPage() {
                         <Button size="sm" variant="destructive" onClick={() => handleDeleteWorkLog(log.id)}>
                           Delete
                         </Button>
+                        {(log.totalAmount - log.amountPaid) > 0 && (
+                          <Button size="sm" variant="secondary" onClick={() => handleOpenPayDialog(log)}>
+                            Pay
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -854,6 +917,17 @@ export default function EmployeesPage() {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="worklog-total-amount">Total Amount (€)</Label>
+                <Input
+                  id="worklog-total-amount"
+                  type="number"
+                  value={currentWorkLog.totalAmount}
+                  onChange={(e) =>
+                    setCurrentWorkLog({ ...currentWorkLog, totalAmount: parseFloat(e.target.value) })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="worklog-notes">Notes</Label>
                 <Textarea
                   id="worklog-notes"
@@ -870,6 +944,40 @@ export default function EmployeesPage() {
                 Cancel
               </Button>
               <Button type="submit">{isEditingWorkLog ? "Update" : "Add"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isPayDialogOpen} onOpenChange={setIsPayDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Pay Work Log</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handlePaySubmit}>
+            <div className="grid gap-4 py-4">
+              {workLogToPay && (
+                <>
+                  <div>
+                    <p>Remaining Amount: {workLogToPay.totalAmount - workLogToPay.amountPaid}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="payment-amount">Payment Amount (€)</Label>
+                    <Input
+                      id="payment-amount"
+                      type="number"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      placeholder={`Enter amount (max €${workLogToPay.totalAmount - workLogToPay.amountPaid})`}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsPayDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Submit Payment</Button>
             </DialogFooter>
           </form>
         </DialogContent>

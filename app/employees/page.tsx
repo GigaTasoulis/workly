@@ -834,6 +834,7 @@ export default function EmployeesPage() {
                   <Input
                     id="hireDate"
                     type="date"
+                    className=" dark:bg-gray-200 dark:text-gray-900"
                     value={currentEmployee.hireDate}
                     onChange={(e) => setCurrentEmployee({ ...currentEmployee, hireDate: e.target.value })}
                   />
@@ -929,6 +930,7 @@ export default function EmployeesPage() {
                 <Input
                   id="worklog-date"
                   type="date"
+                  className=" dark:bg-gray-200 dark:text-gray-900"
                   value={currentWorkLog.date}
                   onChange={(e) =>
                     setCurrentWorkLog({ ...currentWorkLog, date: e.target.value })

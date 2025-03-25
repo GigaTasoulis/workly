@@ -799,6 +799,7 @@ export default function CustomersPage() {
                     id="date"
                     type="date"
                     value={currentTransaction.date}
+                    className="dark:bg-gray-200 dark:text-gray-900"
                     onChange={(e) =>
                       setCurrentTransaction({
                         ...currentTransaction,

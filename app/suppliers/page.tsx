@@ -636,6 +636,7 @@ export default function SuppliersPage() {
                   <Input
                     id="date"
                     type="date"
+                    className=" dark:bg-gray-200 dark:text-gray-900"
                     value={currentSupplierTransaction.date}
                     onChange={(e) =>
                       setCurrentSupplierTransaction({

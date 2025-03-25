@@ -653,53 +653,65 @@ export default function EmployeesPage() {
           </Select>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Υπαλληλος
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Χωρος εργασιας
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Ημ/νια
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Ωρες Εργασιας
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Πληρωμη</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Πληρωμη
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Σημειωσεις
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Ενεργειες
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
               {paginatedWorkLogs.map((log) => {
                 const employee = employees.find((emp) => emp.id === log.employeeId);
                 return (
                   <tr key={log.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
                       {employee ? `${employee.firstName} ${employee.lastName}` : "Unknown"}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
                       {getWorkplaceName(log.workplaceId)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{log.date}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{log.hoursWorked}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
+                      {log.date}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
+                      {log.hoursWorked}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
                       {`${log.amountPaid} / ${log.totalAmount}`}
                       {log.amountPaid === log.totalAmount ? (
-                        <Badge className="bg-green-100 text-green-800 ml-2">Πληρωμένη</Badge>
+                        <Badge className="bg-green-100 text-green-800 ml-2 dark:bg-green-800 dark:text-green-100">
+                          Πληρωμένη
+                        </Badge>
                       ) : (
-                        <Badge className="bg-yellow-100 text-yellow-800 ml-2">Εκκρεμή</Badge>
+                        <Badge className="bg-yellow-100 text-yellow-800 ml-2 dark:bg-yellow-800 dark:text-yellow-100">
+                          Εκκρεμή
+                        </Badge>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{log.notes}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
+                      {log.notes}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" onClick={() => handleEditWorkLog(log)}>
                           Επεξεργασία

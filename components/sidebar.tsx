@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import { translations as t } from "@/lib/translations"
 import ThemeToggleButton from "@/components/ThemeToggleButton"
 import { ExportDataButton } from "./ExportDataButton"
+import { ImportDataButton } from "./ImportDataButton"
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -91,6 +92,9 @@ export function Sidebar() {
         </div>
         <div className="mt-auto p-4">
           <ExportDataButton />
+        </div>
+        <div className="mt-auto p-4 w-full">
+          <ImportDataButton />
         </div>
       </div>
     </>

@@ -5,7 +5,7 @@ import { getLocalData } from "@/lib/utils";
 
 export function ExportDataButton() {
   const handleExport = () => {
-    const keys = ["employees", "customers", "transactions", "suppliers", "workplaces"];
+    const keys = ["employees", "customers", "transactions", "suppliers", "workplaces", "payments", "worklogs"];
     const data = {};
     keys.forEach((key) => {
       data[key] = getLocalData(key) || [];

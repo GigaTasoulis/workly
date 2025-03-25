@@ -96,7 +96,9 @@ export default function CustomersPage() {
   const [paymentHistoryCustomerFilter, setPaymentHistoryCustomerFilter] = useState<string>("all");
   const [paymentHistorySortOrder, setPaymentHistorySortOrder] = useState<string>("desc");
   const [paymentNotes, setPaymentNotes] = useState<string>("");
-
+  const [currentPaymentPage, setCurrentPaymentPage] = useState(1);
+  const paymentsPerPage = 10;
+  
 
 
 
@@ -534,6 +536,21 @@ export default function CustomersPage() {
       </CardContent>
     </Card>
   )
+  // Filter payments by customer if not "all"
+  let filteredPayments: Payment[] = payments;
+  if (paymentHistoryCustomerFilter !== "all") {
+    filteredPayments = filteredPayments.filter((p: Payment) => p.customerId === paymentHistoryCustomerFilter);
+  }
+  // Sort payments by date based on sort order:
+  filteredPayments.sort((a: Payment, b: Payment) =>
+    paymentHistorySortOrder === "desc"
+      ? new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime()
+      : new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime()
+  );
+
+  const startPaymentIndex = (currentPaymentPage - 1) * paymentsPerPage;
+  const paginatedPayments = filteredPayments.slice(startPaymentIndex, startPaymentIndex + paymentsPerPage);
+
 
   return (
     <div className="space-y-6">
@@ -902,39 +919,51 @@ export default function CustomersPage() {
           );
           return (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-50 dark:bg-gray-800">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Πελάτης</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Συναλλαγή</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Προϊόν</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ποσό Πληρωμής</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ημ/νία</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Σημειώσεις</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Πελάτης
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Συναλλαγή
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Προϊόν
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Ποσό Πληρωμής
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Ημ/νία
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Σημειώσεις
+                    </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredPayments.map((p) => {
+                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                  {filteredPayments.map((p: Payment) => {
                     const cust = customers.find((c) => c.id === p.customerId);
                     const transactionForPayment = transactions.find((tr) => tr.id === p.transactionId);
                     return (
                       <tr key={p.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
                           {cust ? cust.name : "Unknown"}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
                           {transactionForPayment ? transactionForPayment.productName : "N/A"}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
                           {p.productName}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
                           €{p.paymentAmount.toLocaleString()}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
                           {p.paymentDate}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
                           {p.notes || "-"}
                         </td>
                       </tr>
@@ -942,6 +971,28 @@ export default function CustomersPage() {
                   })}
                 </tbody>
               </table>
+              <div className="flex justify-center items-center mt-4 space-x-4">
+                <Button
+                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
+                  disabled={currentPaymentPage === 1}
+                  onClick={() => setCurrentPaymentPage(currentPaymentPage - 1)}
+                >
+                  ←
+                </Button>
+                <span className="text-sm font-medium">
+                  {currentPaymentPage} / {Math.ceil(filteredPayments.length / paymentsPerPage)}
+                </span>
+                <Button
+                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
+                  disabled={
+                    currentPaymentPage === Math.ceil(filteredPayments.length / paymentsPerPage) ||
+                    Math.ceil(filteredPayments.length / paymentsPerPage) === 0
+                  }
+                  onClick={() => setCurrentPaymentPage(currentPaymentPage + 1)}
+                >
+                  →
+                </Button>
+              </div>
             </div>
           );
         })()}

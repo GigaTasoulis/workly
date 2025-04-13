@@ -97,6 +97,7 @@ export default function CustomersPage() {
   const [paymentHistorySortOrder, setPaymentHistorySortOrder] = useState<string>("desc");
   const [paymentNotes, setPaymentNotes] = useState<string>("");
   const [currentPaymentPage, setCurrentPaymentPage] = useState(1);
+  const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const paymentsPerPage = 10;
   
 
@@ -136,7 +137,7 @@ export default function CustomersPage() {
       customerId: currentTransaction.customerId,
       productName: currentTransaction.productName,
       paymentAmount: paymentAmount, 
-      paymentDate: new Date().toISOString().split("T")[0],
+      paymentDate: paymentDate,
       notes: paymentNotes,
     };
     const updatedPayments = [...payments, newPayment];
@@ -184,6 +185,7 @@ export default function CustomersPage() {
     // Close the Payment Dialog and reset paymentAmount:
     setIsPaymentDialogOpen(false);
     setPaymentAmount(0);
+    setPaymentDate(new Date().toISOString().split("T")[0]);
     logActivity({
       type: "transaction",
       action: t.transactionPaid, 
@@ -697,7 +699,7 @@ export default function CustomersPage() {
             }}
           >
             <div className="grid gap-4 py-4">
-              <div className="space-y-2">
+              <div>
                 <p>
                   <strong>Προϊόν:</strong> {currentTransaction.productName}
                 </p>
@@ -726,6 +728,17 @@ export default function CustomersPage() {
                   onChange={(e) =>
                     setPaymentAmount(Number.parseFloat(e.target.value) || 0)
                   }
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="paymentDate">Ημερομηνία Πληρωμής</Label>
+                <Input
+                  id="paymentDate"
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-gray-200 dark:text-gray-900"
                   required
                 />
               </div>

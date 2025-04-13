@@ -98,6 +98,7 @@ export default function CustomersPage() {
   const [paymentNotes, setPaymentNotes] = useState<string>("");
   const [currentPaymentPage, setCurrentPaymentPage] = useState(1);
   const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [paymentCustomerSearch, setPaymentCustomerSearch] = useState<string>("");
   const paymentsPerPage = 10;
   
 
@@ -915,17 +916,32 @@ export default function CustomersPage() {
               <SelectItem value="asc">Παλαιότερες</SelectItem>
             </SelectContent>
           </Select>
+          <Input
+            type="text"
+            placeholder="Αναζήτηση πελάτη..."
+            value={paymentCustomerSearch}
+            onChange={(e) => setPaymentCustomerSearch(e.target.value)}
+            className="w-full md:max-w-sm"
+          />
         </div>
         {(() => {
           // Filter payments by customer if not "all"
-          let filteredPayments = payments;
+          let filteredPayments: Payment[] = payments;
           if (paymentHistoryCustomerFilter !== "all") {
-            filteredPayments = filteredPayments.filter(
-              (p) => p.customerId === paymentHistoryCustomerFilter
-            );
+            filteredPayments = filteredPayments.filter((p: Payment) => p.customerId === paymentHistoryCustomerFilter);
           }
-          // Sort payments by date
-          filteredPayments.sort((a, b) =>
+
+          // Now apply the manual search filtering by customer name:
+          if (paymentCustomerSearch.trim() !== "") {
+            filteredPayments = filteredPayments.filter((p: Payment) => {
+              const customer = customers.find((c) => c.id === p.customerId);
+              if (!customer) return false;
+              return customer.name.toLowerCase().includes(paymentCustomerSearch.toLowerCase());
+            });
+          }
+
+          // Then sort payments by date based on sort order:
+          filteredPayments.sort((a: Payment, b: Payment) =>
             paymentHistorySortOrder === "desc"
               ? new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime()
               : new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime()

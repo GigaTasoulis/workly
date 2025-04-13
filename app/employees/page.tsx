@@ -166,7 +166,7 @@ export default function EmployeesPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!currentEmployee.firstName || !currentEmployee.lastName || !currentEmployee.email) {
+    if (!currentEmployee.firstName || !currentEmployee.lastName) {
       toast({
         title: "Error",
         description: "First name, last name, and email are required fields.",
@@ -782,13 +782,12 @@ export default function EmployeesPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">{t.email} *</Label>
+                  <Label htmlFor="email">{t.email}</Label>
                   <Input
                     id="email"
-                    type="email"
+                    type="text"
                     value={currentEmployee.email}
                     onChange={(e) => setCurrentEmployee({ ...currentEmployee, email: e.target.value })}
-                    required
                   />
                 </div>
                 <div className="space-y-2">

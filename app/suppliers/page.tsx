@@ -127,7 +127,7 @@ export default function SuppliersPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!currentSupplier.name || !currentSupplier.email) {
+    if (!currentSupplier.name) {
       toast({
         title: "Σφάλμα",
         description: "Το όνομα και το email είναι υποχρεωτικά πεδία.",
@@ -494,13 +494,12 @@ export default function SuppliersPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">{t.email} *</Label>
+                  <Label htmlFor="email">{t.email}</Label>
                   <Input
                     id="email"
-                    type="email"
+                    type="text"
                     value={currentSupplier.email}
                     onChange={(e) => setCurrentSupplier({ ...currentSupplier, email: e.target.value })}
-                    required
                   />
                 </div>
                 <div className="space-y-2">

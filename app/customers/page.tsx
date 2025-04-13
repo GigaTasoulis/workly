@@ -260,10 +260,10 @@ export default function CustomersPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!currentCustomer.name || !currentCustomer.email) {
+    if (!currentCustomer.name) {
       toast({
         title: "Error",
-        description: "Name and email are required fields.",
+        description: "Name is a required field.",
         variant: "destructive",
       })
       return
@@ -622,13 +622,12 @@ export default function CustomersPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">{t.email} *</Label>
+                  <Label htmlFor="email">{t.email}</Label>
                   <Input
                     id="email"
-                    type="email"
+                    type="text"
                     value={currentCustomer.email}
                     onChange={(e) => setCurrentCustomer({ ...currentCustomer, email: e.target.value })}
-                    required
                   />
                 </div>
                 <div className="space-y-2">

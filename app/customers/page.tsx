@@ -116,9 +116,6 @@ export default function CustomersPage() {
 
   const columns = [
     { key: "name", label: t.customerName },
-    { key: "contactPerson", label: t.contactPerson },
-    { key: "email", label: t.email },
-    { key: "address", label: t.address },
     { key: "phone", label: t.phone },
     { key: "afm", label: "ΑΦΜ" },
     { key: "tractor", label: "Τρακτέρ" },

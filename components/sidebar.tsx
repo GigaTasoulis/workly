@@ -3,6 +3,8 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Building2, Users, Briefcase, ShoppingBag, LayoutDashboard, Menu, X } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/components/AuthProvider"
 import { Button } from "@/components/ui/button"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
@@ -14,6 +16,9 @@ import { ImportDataButton } from "./ImportDataButton"
 export function Sidebar() {
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
+  const router = useRouter()
+  const { logout } = useAuth()
+
 
   const routes = [
     {
@@ -58,7 +63,7 @@ export function Sidebar() {
 
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-950 transform transition-transform duration-200 ease-in-out md:translate-x-0 md:static md:w-64 border-r",
+          "fixed inset-y-0 left-0 z-50 w-64 flex flex-col bg-white dark:bg-gray-950 transform transition-transform duration-200 ease-in-out md:translate-x-0 md:static md:w-64 border-r",
           isOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -87,14 +92,27 @@ export function Sidebar() {
             </Link>
           ))}
         </nav>
-        <div className="mt-auto p-4">
+        <div className="p-4">
           <ThemeToggleButton />
         </div>
-        <div className="mt-auto p-4">
+        <div className="p-4">
           <ExportDataButton />
         </div>
-        <div className="mt-auto p-4 w-full">
+        <div className="p-4">
           <ImportDataButton />
+        </div>
+        <div className="mt-auto p-4">
+          <Button
+            className="w-full"
+            onClick={() => {
+              logout()
+              localStorage.setItem('theme', 'light');
+              document.documentElement.classList.remove('dark');
+              router.replace('/login')
+            }}
+          >
+            Log out
+          </Button>
         </div>
       </div>
     </>

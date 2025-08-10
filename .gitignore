@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+npm-debug.log*
 
 # next.js
 /.next/
@@ -31,3 +32,14 @@ next-env.d.ts
 
 # Electron build output folder (electron-builder output)
 /dist
+
+# Cloudflare / Wrangler
+.wrangler/
+.worker/
+functionsWorker-*.mjs
+functionsRoutes-*.mjs
+middleware-*.js
+middleware-*.mjs
+middleware-*.ts
+*_facade.js
+*_facade.mjs

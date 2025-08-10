@@ -1,0 +1,10 @@
+name = "workly"
+pages_build_output_dir = "./dist"   # ← adjust to your framework’s output dir
+
+compatibility_date = "2025-08-10"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"                            # available as context.env.DB
+database_name = "workly-dev"
+database_id = "6646ce60-77d2-4671-b513-84518736a005"

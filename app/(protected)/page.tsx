@@ -13,6 +13,7 @@ import { TopCustomers } from "@/components/dashboard/top-customers"
 import { TopDebts } from "@/components/dashboard/TopDebts"
 import { translations as t } from "@/lib/translations"
 import { getLocalData } from "@/lib/utils"
+import RequireAuth from "@/components/RequireAuth"
 
 export default function Home() {
   const [suppliersCount, setSuppliersCount] = useState(0)
@@ -168,6 +169,7 @@ export default function Home() {
     
 
   return (
+    <RequireAuth>
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">{t.dashboard}</h1>
@@ -247,5 +249,6 @@ export default function Home() {
         </Card>
       </div>
     </div>
+    </RequireAuth>
   )
 }

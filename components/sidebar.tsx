@@ -14,10 +14,11 @@ import { ExportDataButton } from "./ExportDataButton"
 import { ImportDataButton } from "./ImportDataButton"
 
 export function Sidebar() {
-  const pathname = usePathname()
-  const [isOpen, setIsOpen] = useState(false)
-  const router = useRouter()
-  const { logout } = useAuth()
+  const pathname = usePathname();
+  const [isOpen, setIsOpen] = useState(false);
+  const router = useRouter();
+  const { logout } = useAuth();
+  const [busy, setBusy] = useState(false);
 
 
   const routes = [
@@ -104,14 +105,22 @@ export function Sidebar() {
         <div className="mt-auto p-4">
           <Button
             className="w-full"
-            onClick={() => {
-              logout()
-              localStorage.setItem('theme', 'light');
-              document.documentElement.classList.remove('dark');
-              router.replace('/login')
+            disabled={busy}
+            onClick={async () => {
+              if (busy) return;
+              setBusy(true);
+              try {
+                await logout(); 
+              } finally {
+                localStorage.setItem("theme", "light");
+                document.documentElement.classList.remove("dark");
+
+                router.replace("/login/"); 
+                setBusy(false);
+              }
             }}
           >
-            Log out
+            {busy ? "Logging out…" : "Log out"}
           </Button>
         </div>
       </div>

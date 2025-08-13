@@ -9,3 +9,10 @@ compatibility_flags = ["nodejs_compat"]
 binding = "DB"                                   # <-- must be exactly DB
 database_name = "workly-preview"
 database_id = "1e0adb30-5b71-428b-8ed8-fee66494c303"
+
+# PRODUCTION
+[env.production]
+[[env.production.d1_databases]]
+binding = "DB"                         # MUST be exactly DB
+database_name = "workly-prod"
+database_id = "21f7f0de-88d7-4db2-acb7-11638ca2461d"

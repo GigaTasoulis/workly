@@ -54,7 +54,7 @@ async function getUserFromSession(env: any, sessionId?: string | null) {
   const now = Math.floor(Date.now() / 1000);
   const row = await env.DB.prepare(
     `SELECT u.id, u.username
-     FROM sessions s JOIN users u ON s.user_id = u.id
+     FROM sessions s JOIN auth_users u ON s.user_id = u.id
      WHERE s.id = ? AND s.expires_at > ?`
   ).bind(sessionId, now).first() as { id: string; username: string } | null;
   return row ?? null;
@@ -87,7 +87,7 @@ export async function onRequest(context: any) {
     if (!username || !password) return json({ error: "Missing credentials" }, { status: 400 });
 
     const row = await env.DB.prepare(
-      "SELECT id, password_hash FROM users WHERE username = ?"
+      "SELECT id, password_hash FROM auth_users WHERE username = ?"
     ).bind(username).first() as { id: string; password_hash: string } | null;
 
     if (!row) return json({ error: "Invalid credentials" }, { status: 401 });
@@ -147,14 +147,14 @@ export async function onRequest(context: any) {
     const { username, password } = body || {};
     if (!username || !password) return json({ error: "Missing fields" }, { status: 400 });
 
-    const exists = await env.DB.prepare("SELECT 1 FROM users WHERE username = ?").bind(username).first();
+    const exists = await env.DB.prepare("SELECT 1 FROM auth_users WHERE username = ?").bind(username).first();
     if (exists) return json({ error: "Username already exists" }, { status: 409 });
 
     const password_hash = await hash(password, 10);
     const id = crypto.randomUUID();
 
     await env.DB.prepare(
-      "INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)"
+      "INSERT INTO auth_users (id, username, password_hash) VALUES (?, ?, ?)"
     ).bind(id, username, password_hash).run();
 
     return json({ ok: true, id, username }, { status: 201 });

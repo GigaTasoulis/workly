@@ -13,9 +13,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (login(username, password)) {
+    setError('');
+    const ok = await login(username, password);
+    if (ok) {
       router.replace('/'); // go to home/dashboard
     } else {
       setError('Invalid credentials');

@@ -56,7 +56,7 @@ async function getUserFromSession(env: any, sessionId?: string | null) {
     `SELECT u.id, u.username
      FROM sessions s JOIN users u ON s.user_id = u.id
      WHERE s.id = ? AND s.expires_at > ?`
-  ).bind(sessionId, now).first<{ id: string; username: string }>();
+  ).bind(sessionId, now).first() as { id: string; username: string } | null;
   return row ?? null;
 }
 
@@ -88,7 +88,7 @@ export async function onRequest(context: any) {
 
     const row = await env.DB.prepare(
       "SELECT id, password_hash FROM users WHERE username = ?"
-    ).bind(username).first<{ id: string; password_hash: string }>();
+    ).bind(username).first() as { id: string; password_hash: string } | null;
 
     if (!row) return json({ error: "Invalid credentials" }, { status: 401 });
 

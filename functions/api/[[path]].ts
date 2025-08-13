@@ -54,7 +54,7 @@ async function getUserFromSession(env: any, sessionId?: string | null) {
   const now = Math.floor(Date.now() / 1000);
   const row = await env.DB.prepare(
     `SELECT u.id, u.username
-     FROM sessions s JOIN auth_users u ON s.user_id = u.id
+     FROM auth_sessions s JOIN auth_users u ON s.user_id = u.id
      WHERE s.id = ? AND s.expires_at > ?`
   ).bind(sessionId, now).first() as { id: string; username: string } | null;
   return row ?? null;
@@ -100,7 +100,7 @@ export async function onRequest(context: any) {
     const expiresAt = Math.floor(Date.now() / 1000) + maxAge;
 
     await env.DB.prepare(
-      "INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)"
+      "INSERT INTO auth_sessions (id, user_id, expires_at) VALUES (?, ?, ?)"
     ).bind(sessionId, row.id, expiresAt).run();
 
     return json({ ok: true }, {
@@ -121,7 +121,7 @@ export async function onRequest(context: any) {
     const cookies = parseCookies(request);
     const sid = cookies.session;
     if (sid) {
-      await env.DB.prepare("DELETE FROM sessions WHERE id = ?").bind(sid).run();
+      await env.DB.prepare("DELETE FROM auth_sessions WHERE id = ?").bind(sid).run();
     }
     return json({ ok: true }, {
       headers: {

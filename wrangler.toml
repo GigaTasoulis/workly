@@ -1,5 +1,5 @@
 name = "workly"
-pages_build_output_dir = "./dist"   # ← adjust to your framework’s output dir
+pages_build_output_dir = "out"   # ← adjust to your framework’s output dir
 
 compatibility_date = "2025-08-10"
 compatibility_flags = ["nodejs_compat"]

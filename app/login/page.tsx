@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { motion } from 'framer-motion';
@@ -8,10 +8,15 @@ import { motion } from 'framer-motion';
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
+  const { user, initialized } = useAuth();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (initialized && user) router.replace('/');
+  }, [initialized, user, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

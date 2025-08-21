@@ -1,6 +1,5 @@
 "use client"
 
-import type React from "react"
 import { useState, useEffect } from "react"
 import { DataTable } from "@/components/data-table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -9,15 +8,48 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
-import { generateId, getLocalData, setLocalData } from "@/lib/utils"
 import { TransactionList } from "@/components/TransactionList"
-import { initializeData } from "@/lib/data"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ShoppingBag, Mail, Phone, MapPin, FileText } from "lucide-react"
 import { translations as t } from "@/lib/translations"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
+
+const STATUS_API = ["pending", "paid", "cancelled"] as const;
+type StatusApi = typeof STATUS_API[number];
+
+const STATUS_UI: Record<StatusApi, "Σε εκκρεμότητα" | "Πληρώθηκε" | "Ακυρώθηκε"> = {
+  pending: "Σε εκκρεμότητα",
+  paid: "Πληρώθηκε",
+  cancelled: "Ακυρώθηκε",
+};
+
+function mapStatusToUi(api: StatusApi): "Σε εκκρεμότητα" | "Πληρώθηκε" | "Ακυρώθηκε" {
+  return STATUS_UI[api];
+}
+
+function mapStatusToApi(ui: "Σε εκκρεμότητα" | "Πληρώθηκε" | "Ακυρώθηκε"): StatusApi {
+  if (ui === "Σε εκκρεμότητα") return "pending";
+  if (ui === "Πληρώθηκε") return "paid";
+  return "cancelled";
+}
+
+function statusBadgeClass(status: string) {
+  switch (status) {
+    case "Πληρώθηκε":
+      return "bg-green-100 text-green-800 border-green-200";
+    case "Σε εκκρεμότητα":
+      return "bg-yellow-100 text-yellow-800 border-yellow-200";
+    case "Ακυρώθηκε":
+      return "bg-red-100 text-red-800 border-red-200";
+    default:
+      return "";
+  }
+}
+
+
 
 // Supplier interface remains unchanged
 interface Supplier {
@@ -30,6 +62,7 @@ interface Supplier {
   notes: string
   totalAmount: number
   amountPaid: number
+  debt?: number
 }
 
 // New interface for supplier transactions
@@ -40,7 +73,7 @@ interface SupplierTransaction {
   amount: number
   amountPaid: number
   date: string
-  status: "paid" | "pending" | "cancelled"
+  status: "Πληρώθηκε" | "Σε εκκρεμότητα" | "Ακυρώθηκε"
   notes: string
 }
 
@@ -64,7 +97,7 @@ const initialSupplierTransaction: SupplierTransaction = {
   amount: 0,
   amountPaid: 0,
   date: new Date().toISOString().split("T")[0],
-  status: "pending",
+  status: "Σε εκκρεμότητα",
   notes: "",
 }
 
@@ -84,17 +117,61 @@ export default function SuppliersPage() {
   const [isSupplierPaymentDialogOpen, setIsSupplierPaymentDialogOpen] = useState(false)
   const [supplierPaymentAmount, setSupplierPaymentAmount] = useState<number>(0)
   const [supplierTransactionFilter, setSupplierTransactionFilter] = useState<"all" | "paid" | "pending">("all");
+  const [initialDebt, setInitialDebt] = useState<number>(0);
+
+  async function fetchSupplierTransactions(supplierId: string) {
+    if (!supplierId) return;
+    const url = `/api/supplier-transactions?supplierId=${encodeURIComponent(supplierId)}`;
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) {
+      console.error("Failed to fetch supplier transactions", await res.text());
+      return;
+    }
+    const data = await res.json();
+    // Map snake_case (API) -> camelCase (UI component expects)
+    const mapped = (data.transactions || []).map((t: any) => ({
+      id: t.id,
+      supplierId: t.supplier_id,
+      productName: t.product_name,
+      amount: Number(t.amount) || 0,
+      amountPaid: Number(t.amount_paid) || 0,
+      date: t.date, // already YYYY-MM-DD
+      status: mapStatusToUi(t.status as StatusApi),
+      notes: t.notes || "",
+    }));
+    setSupplierTransactions(mapped);
+  }
+  
+
+
+  // fetch from API and map snake_case -> camelCase
+  async function fetchSuppliers() {
+    const res = await fetch("/api/suppliers", { credentials: "include" });
+    if (!res.ok) {
+      console.error("Failed to fetch suppliers", await res.text());
+      return;
+    }
+    const data = await res.json();
+    const mapped: Supplier[] = (data.suppliers || []).map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      contactPerson: s.contact_person || "",
+      email: s.email || "",
+      phone: s.phone || "",
+      address: s.address || "",
+      notes: s.notes || "",
+      totalAmount: 0,
+      amountPaid: 0,
+      debt: Number(s.debt || 0),
+    }));
+    setSuppliers(mapped);
+  }
 
   useEffect(() => {
-    // Initialize sample data if needed
-    if (typeof window !== "undefined") {
-      initializeData()
-    }
-    const supplierData = getLocalData("suppliers") || []
-    setSuppliers(supplierData)
-    const transactionsData = getLocalData("supplierTransactions") || []
-    setSupplierTransactions(transactionsData)
-  }, [])
+    fetchSuppliers();
+  }, []);
+
+  
 
   const columns = [
     { key: "name", label: "Όνομα" },
@@ -105,95 +182,171 @@ export default function SuppliersPage() {
   ]
 
   const handleAddNew = () => {
-    setCurrentSupplier(initialSupplier)
-    setIsEditing(false)
-    setIsDialogOpen(true)
-  }
+    setCurrentSupplier(initialSupplier);
+    setInitialDebt(0);
+    setIsEditing(false);
+    setIsDialogOpen(true);
+  };
 
   const handleEdit = (supplier: Supplier) => {
-    setCurrentSupplier(supplier)
-    setIsEditing(true)
-    setIsDialogOpen(true)
+  setCurrentSupplier(supplier);
+  setIsEditing(true);
+  setIsDialogOpen(true);
+};
+
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await fetch(`/api/suppliers/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (res.status === 404) throw new Error("not-found");
+      if (!res.ok) throw new Error("server");
+
+      toast({ title: "Διαγράφηκε", description: "Ο προμηθευτής διαγράφηκε." });
+      if (selectedSupplier?.id === id) setSelectedSupplier(null);
+      await fetchSuppliers(); // refresh list (and debt totals)
+    } catch (e: any) {
+      const msg =
+        e?.message === "not-found"
+          ? "Ο προμηθευτής δεν βρέθηκε."
+          : "Κάτι πήγε στραβά.";
+      toast({ title: "Σφάλμα", description: msg, variant: "destructive" });
+    }
+  };
+
+  // Submit for Add/Edit dialog
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  const name = currentSupplier.name?.trim();
+  if (!name) {
+    toast({
+      title: "Σφάλμα",
+      description: "Το όνομα είναι υποχρεωτικό.",
+      variant: "destructive",
+    });
+    return;
   }
 
-  const handleDelete = (id: string) => {
-    const updatedSuppliers = suppliers.filter((supplier) => supplier.id !== id)
-    setSuppliers(updatedSuppliers)
-    setLocalData("suppliers", updatedSuppliers)
-    if (selectedSupplier && selectedSupplier.id === id) {
-      setSelectedSupplier(null)
-    }
-  }
+  const payload = {
+    name,
+    contact_person: currentSupplier.contactPerson?.trim() || "",
+    email: currentSupplier.email?.trim() || "",
+    phone: currentSupplier.phone?.trim() || "",
+    address: currentSupplier.address?.trim() || "",
+    notes: currentSupplier.notes?.trim() || "",
+  };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!currentSupplier.name) {
-      toast({
-        title: "Σφάλμα",
-        description: "Το όνομα και το email είναι υποχρεωτικά πεδία.",
-        variant: "destructive",
-      })
-      return
-    }
-    let updatedSuppliers: Supplier[]
+  try {
     if (isEditing) {
-      updatedSuppliers = suppliers.map((supplier) =>
-        supplier.id === currentSupplier.id ? currentSupplier : supplier
-      )
-      toast({
-        title: t.supplierUpdated,
-        description: "Ο προμηθευτής ενημερώθηκε με επιτυχία.",
-      })
-      if (selectedSupplier && selectedSupplier.id === currentSupplier.id) {
-        setSelectedSupplier(currentSupplier)
-      }
+      const res = await fetch(`/api/suppliers/${currentSupplier.id}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      if (res.status === 404) throw new Error("not-found");
+      if (res.status === 409) throw new Error("conflict");
+      if (!res.ok) throw new Error("server");
+
+      toast({ title: "Ενημερώθηκε", description: "Ο προμηθευτής ενημερώθηκε." });
     } else {
-      const newSupplier = { ...currentSupplier, id: generateId() }
-      updatedSuppliers = [...suppliers, newSupplier]
-      toast({
-        title: t.supplierAdded,
-        description: "Ο προμηθευτής προστέθηκε με επιτυχία.",
-      })
+      const res = await fetch(`/api/suppliers`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      if (res.status === 409) throw new Error("conflict");
+      if (!res.ok) throw new Error("server");
+    
+      // Parse the created supplier so we have its id
+      const created = await res.json();
+      const createdId = created?.supplier?.id;
+    
+      // If user provided an initial balance, create an opening transaction
+      if (createdId && initialDebt > 0) {
+        const txPayload = {
+          supplier_id: createdId,
+          product_name: "Υπόλοιπο Έναρξης",
+          amount: Number(initialDebt),
+          amount_paid: 0,
+          date: new Date().toISOString().slice(0, 10),
+          status: "pending",           // server will accept API code
+          notes: "Αρχικό υπόλοιπο",
+        };
+    
+        const txRes = await fetch(`/api/supplier-transactions`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(txPayload),
+        });
+        if (!txRes.ok) {
+          console.error("Failed to create opening balance:", await txRes.text());
+          // not fatal—still proceed
+        }
+      }
+    
+      toast({ title: "Προστέθηκε", description: "Ο προμηθευτής προστέθηκε." });
     }
-    setSuppliers(updatedSuppliers)
-    setLocalData("suppliers", updatedSuppliers)
-    setIsDialogOpen(false)
+
+    setIsDialogOpen(false);
+    await fetchSuppliers(); // refresh list + debt
+    
+  } catch (e: any) {
+    const msg =
+      e?.message === "conflict"
+        ? "Υπάρχει ήδη προμηθευτής με αυτό το όνομα."
+        : e?.message === "not-found"
+        ? "Ο προμηθευτής δεν βρέθηκε."
+        : "Κάτι πήγε στραβά.";
+    toast({ title: "Σφάλμα", description: msg, variant: "destructive" });
   }
+};
 
   const handleRowClick = (supplier: Supplier) => {
-    setSelectedSupplier(supplier)
-  }
+    setSelectedSupplier(supplier);
+  };
+
+  useEffect(() => {
+    if (selectedSupplier?.id) {
+      fetchSupplierTransactions(selectedSupplier.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSupplier?.id]);
+  
+
 
   // ------------- Supplier Transaction Logic --------------
 
-  const getSupplierTransactions = (supplierId: string) => {
-    let filtered = supplierTransactions.filter((t) => t.supplierId === supplierId);
+  const getSupplierTransactions = () => {
+    let filtered = supplierTransactions;
     if (supplierTransactionFilter !== "all") {
-      filtered = filtered.filter((t) => t.status === supplierTransactionFilter);
+      filtered = filtered.filter((t) => mapStatusToApi(t.status) === supplierTransactionFilter);
     }
     return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  };  
+  };
   
 
   // Helper: Compute total paid (or "spent") for a supplier (if needed)
-  const getTotalPaid = (supplierId: string) => {
-    return supplierTransactions
-      .filter((t) => t.supplierId === supplierId)
-      .reduce((sum, t) => sum + (Number(t.amountPaid) || 0), 0);
-  }  
+  const getTotalPaid = () =>
+    supplierTransactions.reduce((sum, t) => sum + (Number(t.amountPaid) || 0), 0);
 
   // Helper: Compute outstanding balance ("Χρέη") from pending transactions
-  const getDebt = (supplierId: string) => {
-    return supplierTransactions
-      .filter((t) => t.supplierId === supplierId && t.status === "pending")
-      .reduce((sum, t) => sum + (t.amount - (t.amountPaid || 0)), 0)
-  }
+  const getDebt = (supplierId?: string) => {
+    let list = supplierTransactions;
+    if (supplierId) {
+      list = list.filter(t => t.supplierId === supplierId);
+    }
+    return list
+      .filter(t => mapStatusToApi(t.status) === "pending")
+      .reduce((sum, t) => sum + (t.amount - (t.amountPaid || 0)), 0);
+  };
+  
 
   // We'll augment supplier data with debt for display in DataTable if needed
-  const suppliersWithDebt = suppliers.map((supplier) => ({
-    ...supplier,
-    debt: getDebt(supplier.id),
-  }))
+  const suppliersWithDebt = suppliers; // debt already provided by API
 
   // Open the Add Transaction dialog for the selected supplier
   const handleAddSupplierTransaction = () => {
@@ -214,44 +367,64 @@ export default function SuppliersPage() {
   }
 
   // Submission handler for supplier transactions
-  const handleSupplierTransactionSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!currentSupplierTransaction.productName || !currentSupplierTransaction.amount) {
+  const handleSupplierTransactionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+  
+    const tx = currentSupplierTransaction;
+    if (!tx.productName?.trim() || !tx.amount) {
       toast({
         title: "Σφάλμα",
         description: "Το όνομα του προϊόντος και το ποσό είναι υποχρεωτικά πεδία.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
-    // Create a copy and update status if fully paid
-    const transactionToSave = { ...currentSupplierTransaction }
-    if (transactionToSave.amountPaid >= transactionToSave.amount) {
-      transactionToSave.status = "paid"
+    if (!selectedSupplier?.id) {
+      toast({ title: "Σφάλμα", description: "Δεν έχει επιλεχθεί προμηθευτής.", variant: "destructive" });
+      return;
     }
-    if (isSupplierTransactionEditing) {
-      const updatedTransactions = supplierTransactions.map((t) =>
-        t.id === transactionToSave.id ? transactionToSave : t
-      )
-      setSupplierTransactions(updatedTransactions)
-      setLocalData("supplierTransactions", updatedTransactions)
-      toast({
-        title: "Η συναλλαγή ενημερώθηκε",
-        description: "Η συναλλαγή ενημερώθηκε επιτυχώς.",
-      })
-      setIsSupplierTransactionEditing(false)
-    } else {
-      transactionToSave.id = generateId()
-      const updatedTransactions = [...supplierTransactions, transactionToSave]
-      setSupplierTransactions(updatedTransactions)
-      setLocalData("supplierTransactions", updatedTransactions)
-      toast({
-        title: "Η συναλλαγή προστέθηκε",
-        description: "Η συναλλαγή καταχωρήθηκε επιτυχώς.",
-      })
+  
+    const payload = {
+      supplier_id: selectedSupplier.id,
+      product_name: tx.productName.trim(),
+      amount: Number(tx.amount),
+      amount_paid: Number(tx.amountPaid) || 0,
+      date: tx.date || new Date().toISOString().slice(0, 10),
+      status: mapStatusToApi(tx.status),         // server will auto-set to 'paid' if amount_paid >= amount
+      notes: tx.notes || "",
+    };
+  
+    try {
+      if (isSupplierTransactionEditing) {
+        const res = await fetch(`/api/supplier-transactions/${tx.id}`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        toast({ title: "Η συναλλαγή ενημερώθηκε", description: "Η συναλλαγή ενημερώθηκε επιτυχώς." });
+      } else {
+        const res = await fetch(`/api/supplier-transactions`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        toast({ title: "Η συναλλαγή προστέθηκε", description: "Η συναλλαγή καταχωρήθηκε επιτυχώς." });
+      }
+  
+      setIsSupplierTransactionDialogOpen(false);
+      setIsSupplierTransactionEditing(false);
+      await fetchSupplierTransactions(selectedSupplier.id); // refresh list
+      await fetchSuppliers(); // refresh debt in suppliers table
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: "Σφάλμα", description: "Αποτυχία αποθήκευσης συναλλαγής.", variant: "destructive" });
     }
-    setIsSupplierTransactionDialogOpen(false)
-  }
+  };
+  
 
   // Payment handling for a supplier transaction
   const handleOpenSupplierPaymentDialog = (transaction: SupplierTransaction) => {
@@ -260,54 +433,64 @@ export default function SuppliersPage() {
     setIsSupplierPaymentDialogOpen(true)
   }
 
-  const handleSupplierPaymentSubmit = () => {
-    const remaining =
-      Number(currentSupplierTransaction.amount) - Number(currentSupplierTransaction.amountPaid)
+  const handleSupplierPaymentSubmit = async () => {
+    const tx = currentSupplierTransaction;
+    if (!selectedSupplier?.id) return;
+  
+    const remaining = Number(tx.amount) - Number(tx.amountPaid);
     if (supplierPaymentAmount <= 0) {
-      toast({
-        title: "Σφάλμα",
-        description: "Το ποσό πληρωμής πρέπει να είναι μεγαλύτερο από το μηδέν.",
-        variant: "destructive",
-      })
-      return
+      toast({ title: "Σφάλμα", description: "Το ποσό πληρωμής πρέπει να είναι μεγαλύτερο από το μηδέν.", variant: "destructive" });
+      return;
     }
     if (supplierPaymentAmount > remaining) {
-      toast({
-        title: "Σφάλμα",
-        description: "Το ποσό πληρωμής δεν μπορεί να υπερβαίνει το υπόλοιπο.",
-        variant: "destructive",
-      })
-      return
+      toast({ title: "Σφάλμα", description: "Το ποσό πληρωμής δεν μπορεί να υπερβαίνει το υπόλοιπο.", variant: "destructive" });
+      return;
     }
-    const updatedTransaction = { ...currentSupplierTransaction }
-    updatedTransaction.amountPaid += supplierPaymentAmount
-    if (updatedTransaction.amountPaid >= updatedTransaction.amount) {
-      updatedTransaction.status = "paid"
+  
+    const newPaid = Number(tx.amountPaid) + Number(supplierPaymentAmount);
+  
+    try {
+      const res = await fetch(`/api/supplier-transactions/${tx.id}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ amount_paid: newPaid }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+  
+      toast({ title: "Επιτυχής Πληρωμή", description: "Η πληρωμή καταχωρήθηκε." });
+      setIsSupplierPaymentDialogOpen(false);
+      setSupplierPaymentAmount(0);
+  
+      await fetchSupplierTransactions(selectedSupplier.id);
+      await fetchSuppliers(); // debt might drop or hit zero
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: "Σφάλμα", description: "Αποτυχία πληρωμής.", variant: "destructive" });
     }
-    const updatedTransactions = supplierTransactions.map((t) =>
-      t.id === updatedTransaction.id ? updatedTransaction : t
-    )
-    setSupplierTransactions(updatedTransactions)
-    setLocalData("supplierTransactions", updatedTransactions)
-    toast({
-      title: "Επιτυχής Πληρωμή",
-      description: "Η πληρωμή καταχωρήθηκε.",
-    })
-    setIsSupplierPaymentDialogOpen(false)
-    setSupplierPaymentAmount(0)
-  }
+  };
+  
 
-  const handleDeleteSupplierTransaction = (transactionId: string) => {
-    if (confirm("Είστε σίγουροι ότι θέλετε να διαγράψετε αυτήν τη συναλλαγή;")) {
-      const updatedTransactions = supplierTransactions.filter((t) => t.id !== transactionId)
-      setSupplierTransactions(updatedTransactions)
-      setLocalData("supplierTransactions", updatedTransactions)
-      toast({
-        title: "Η συναλλαγή διαγράφηκε",
-        description: "Η συναλλαγή διαγράφηκε επιτυχώς.",
-      })
+  const handleDeleteSupplierTransaction = async (transactionId: string) => {
+    if (!selectedSupplier?.id) return;
+    if (!confirm("Είστε σίγουροι ότι θέλετε να διαγράψετε αυτήν τη συναλλαγή;")) return;
+  
+    try {
+      const res = await fetch(`/api/supplier-transactions/${transactionId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast({ title: "Η συναλλαγή διαγράφηκε", description: "Η συναλλαγή διαγράφηκε επιτυχώς." });
+  
+      await fetchSupplierTransactions(selectedSupplier.id);
+      await fetchSuppliers(); // debt changes
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: "Σφάλμα", description: "Αποτυχία διαγραφής.", variant: "destructive" });
     }
-  }
+  };
+  
 
   // ------------- UI Rendering --------------
 
@@ -318,7 +501,7 @@ export default function SuppliersPage() {
         <div>
           <h3 className="text-sm font-medium">Ιστορικό Συναλλαγών</h3>
           <p className="text-sm text-muted-foreground">
-            {t.totalSpent}: ${getTotalPaid(selectedSupplier?.id || "").toLocaleString()}
+            {t.totalSpent}: ${getTotalPaid().toLocaleString()}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-4">
@@ -343,16 +526,17 @@ export default function SuppliersPage() {
         </div>
       </div>
       <TransactionList
-        transactions={getSupplierTransactions(selectedSupplier?.id || "")}
-        onEdit={handleEditSupplierTransaction}
+        transactions={getSupplierTransactions()}
+        onEdit={(t) => handleEditSupplierTransaction(t as unknown as SupplierTransaction)}
         onDelete={handleDeleteSupplierTransaction}
-        onPayment={handleOpenSupplierPaymentDialog}
+        onPayment={(t) => handleOpenSupplierPaymentDialog(t as unknown as SupplierTransaction)}
+        getStatusColor={statusBadgeClass}
       />
     </div>
   );  
 
   // Render supplier details with a tab for transactions
-  const renderSupplierCard = () => (
+  const renderSupplierCard = (supplier: Supplier) => (
     <Card>
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
@@ -402,7 +586,12 @@ export default function SuppliersPage() {
                 </div>
               )}
               <div className="pt-4 flex space-x-2">
-                <Button variant="outline" size="sm" onClick={() => handleEdit(selectedSupplier)} className="flex-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => selectedSupplier && handleEdit(selectedSupplier)}
+                  className="flex-1"
+                >
                   Επεξεργασία
                 </Button>
                 <Button
@@ -410,7 +599,7 @@ export default function SuppliersPage() {
                   size="sm"
                   onClick={() => {
                     if (confirm("Είστε σίγουροι ότι θέλετε να διαγράψετε αυτόν τον προμηθευτή;")) {
-                      handleDelete(selectedSupplier?.id || '')
+                      handleDelete(selectedSupplier!.id)
                     }
                   }}
                   className="flex-1"
@@ -447,7 +636,7 @@ export default function SuppliersPage() {
         </div>
         <div>
           {selectedSupplier ? (
-            renderSupplierCard()
+            renderSupplierCard(selectedSupplier)
           ) : (
             <Card>
               <CardHeader>
@@ -528,11 +717,24 @@ export default function SuppliersPage() {
                   rows={3}
                 />
               </div>
+              {!isEditing && (
+                <div className="space-y-2">
+                  <Label htmlFor="initialDebt">Αρχικό Υπόλοιπο (προαιρετικό)</Label>
+                  <Input
+                    id="initialDebt"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={initialDebt}
+                    onChange={(e) => setInitialDebt(parseFloat(e.target.value || "0"))}
+                  />
+                </div>
+              )}
               {/* Read-only computed debt, correlating with supplier transactions */}
               <div className="space-y-2">
                 <Label>Οφειλές</Label>
                 <Input
-                  value={currentSupplier.id ? getDebt(currentSupplier.id).toFixed(2) : "0.00"}
+                  value={currentSupplier.id ? getDebt().toFixed(2) : "0.00"}
                   readOnly
                 />
               </div>
@@ -649,18 +851,18 @@ export default function SuppliersPage() {
               <div className="space-y-2">
                 <Label htmlFor="status">{t.status}</Label>
                 <Select
-                  value={currentSupplierTransaction.status}
+                  value={mapStatusToApi(currentSupplierTransaction.status)}
                   onValueChange={(value: "paid" | "pending" | "cancelled") =>
-                    setCurrentSupplierTransaction({ ...currentSupplierTransaction, status: value })
+                    setCurrentSupplierTransaction({ ...currentSupplierTransaction, status: mapStatusToUi(value as StatusApi), })
                   }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Επιλέξτε κατάσταση" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="paid">{t.paid}</SelectItem>
-                    <SelectItem value="pending">{t.pending}</SelectItem>
-                    <SelectItem value="cancelled">{t.cancelled}</SelectItem>
+                    <SelectItem value="paid">Πληρώθηκε</SelectItem>
+                    <SelectItem value="pending">Σε εκκρεμότητα</SelectItem>
+                    <SelectItem value="cancelled">Ακυρώθηκε</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

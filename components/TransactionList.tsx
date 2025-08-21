@@ -9,14 +9,40 @@ import { format } from "date-fns";
 import { Calendar, DollarSign } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
+function statusBadgeClass(s: string): string {
+  const greek = statusLabel(s);
+  switch (greek) {
+    case "Πληρώθηκε":
+      return "bg-green-100 text-green-800 border-green-200";
+    case "Σε εκκρεμότητα":
+      return "bg-yellow-100 text-yellow-800 border-yellow-200";
+    case "Ακυρώθηκε":
+      return "bg-red-100 text-red-800 border-red-200";
+    default:
+      return "bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300";
+  }
+}
+
+const isPending = (s: string) => s === "pending" || s === "Σε εκκρεμότητα";
+
+// Normalize to Greek for display
+function statusLabel(s: string): string {
+  switch (s) {
+    case "paid": return "Πληρώθηκε";
+    case "pending": return "Σε εκκρεμότητα";
+    case "cancelled": return "Ακυρώθηκε";
+    default: return s;
+  }
+}
+
 export interface Transaction {
   id: string;
-  customerId: string;
+  customerId?: string;
   productName: string;
   amount: number;
   amountPaid: number;
   date: string;
-  status: "paid" | "pending" | "cancelled";
+  status: string;
   notes: string;
 }
 
@@ -36,7 +62,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   onEdit,
   onDelete,
   onPayment,
-  getStatusColor = () => "bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300",
+  getStatusColor,
 }) => {
   // Internal states for pagination, filtering, and sorting.
   const [currentPage, setCurrentPage] = useState(1);
@@ -117,7 +143,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
             <div className="flex-1 space-y-1">
               <div className="flex items-center justify-between">
                 <p className="font-medium">{transaction.productName}</p>
-                <Badge variant="outline" className={getStatusColor(transaction.status)}>
+                <Badge variant="outline" className={getStatusColor ? getStatusColor(transaction.status) : statusBadgeClass(transaction.status)}>
                   {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
                 </Badge>
               </div>
@@ -141,15 +167,17 @@ export const TransactionList: React.FC<TransactionListProps> = ({
               )}
             </div>
             <div className="flex flex-col gap-2">
-              <Button size="sm" variant="outline" onClick={() => onEdit(transaction)}>
-                Επεξεργασία
-              </Button>
-              {transaction.status === "pending" &&
-                transaction.amountPaid < transaction.amount && (
-                  <Button size="sm" variant="secondary" onClick={() => onPayment(transaction)}>
-                    Πληρωμή
-                  </Button>
-                )}
+              {transaction.status !== "Πληρώθηκε" && transaction.status !== "Ακυρώθηκε" && (
+                <Button size="sm" variant="outline" onClick={() => onEdit(transaction)}>
+                  Επεξεργασία
+                </Button>
+              )}
+
+              {isPending(transaction.status) && transaction.amountPaid < transaction.amount && (
+                <Button size="sm" variant="secondary" onClick={() => onPayment(transaction)}>
+                  Πληρωμή
+                </Button>
+              )}
               <Button size="sm" variant="destructive" onClick={() => onDelete(transaction.id)}>
                 Διαγραφή
               </Button>

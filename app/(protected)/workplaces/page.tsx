@@ -10,22 +10,18 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
-import { generateId, getLocalData, setLocalData } from "@/lib/utils"
 import { translations as t } from "@/lib/translations"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Building2, MapPin, Users, FileText } from "lucide-react"
 
-interface Workplace {
-  id: string
-  name: string
-  address: string
-  city: string
-  state: string
-  zipCode: string
-  capacity: string
-  notes: string
-}
+import {
+  fetchWorkplaces,
+  createWorkplace,
+  updateWorkplace,
+  deleteWorkplace,
+  type UIWorkplace as Workplace,
+} from "@/lib/api/workplaces"
 
 const initialWorkplace: Workplace = {
   id: "",
@@ -46,17 +42,34 @@ export default function WorkplacesPage() {
   const [selectedWorkplace, setSelectedWorkplace] = useState<Workplace | null>(null)
   const { toast } = useToast()
 
-  useEffect(() => {
-    const data = getLocalData("workplaces")
-    setWorkplaces(data)
-  }, [])
-
+  // columns unchanged
   const columns = [
     { key: "name", label: t.workplaceName },
     { key: "address", label: t.address },
     { key: "city", label: t.city },
     { key: "capacity", label: t.capacity },
   ]
+
+  // load list from API (reused after mutations)
+  const loadWorkplaces = async () => {
+    try {
+      const data = await fetchWorkplaces()
+      setWorkplaces(data)
+      // keep selection in sync if it still exists
+      if (selectedWorkplace) {
+        const updated = data.find(w => w.id === selectedWorkplace.id) || null
+        setSelectedWorkplace(updated)
+      }
+    } catch (e) {
+      console.error(e)
+      toast({ title: "Σφάλμα", description: "Αποτυχία φόρτωσης χώρων εργασίας.", variant: "destructive" })
+    }
+  }
+
+  useEffect(() => {
+    loadWorkplaces()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleAddNew = () => {
     setCurrentWorkplace(initialWorkplace)
@@ -70,21 +83,22 @@ export default function WorkplacesPage() {
     setIsDialogOpen(true)
   }
 
-  const handleDelete = (id: string) => {
-    const updatedWorkplaces = workplaces.filter((workplace) => workplace.id !== id)
-    setWorkplaces(updatedWorkplaces)
-    setLocalData("workplaces", updatedWorkplaces)
-
-    // If the deleted workplace is currently selected, clear the selection
-    if (selectedWorkplace && selectedWorkplace.id === id) {
-      setSelectedWorkplace(null)
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteWorkplace(id)
+      toast({ title: t.workplaceDeleted ?? "Διαγράφηκε", description: "Ο χώρος εργασίας διαγράφηκε." })
+      if (selectedWorkplace && selectedWorkplace.id === id) setSelectedWorkplace(null)
+      await loadWorkplaces()
+    } catch (e) {
+      console.error(e)
+      toast({ title: "Σφάλμα", description: "Δεν ήταν δυνατή η διαγραφή.", variant: "destructive" })
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!currentWorkplace.name || !currentWorkplace.address) {
+    if (!currentWorkplace.name?.trim() || !currentWorkplace.address?.trim()) {
       toast({
         title: "Error",
         description: "Name and address are required fields.",
@@ -93,36 +107,31 @@ export default function WorkplacesPage() {
       return
     }
 
-    let updatedWorkplaces: Workplace[]
-
-    if (isEditing) {
-      updatedWorkplaces = workplaces.map((workplace) =>
-        workplace.id === currentWorkplace.id ? currentWorkplace : workplace,
-      )
-      toast({
-        title: t.workplaceUpdated,
-        description: "Ο χώρος εργασίας ενημερώθηκε με επιτυχία.",
-      })
-
-      // Update selected workplace if it's the one being edited
-      if (selectedWorkplace && selectedWorkplace.id === currentWorkplace.id) {
-        setSelectedWorkplace(currentWorkplace)
-      }
-    } else {
-      const newWorkplace = {
-        ...currentWorkplace,
-        id: generateId(),
-      }
-      updatedWorkplaces = [...workplaces, newWorkplace]
-      toast({
-        title: t.workplaceAdded,
-        description: "Ο χώρος εργασίας προστέθηκε με επιτυχία.",
-      })
+    const payload = {
+      name: currentWorkplace.name?.trim(),
+      address: currentWorkplace.address?.trim() || "",
+      city: currentWorkplace.city?.trim() || "",
+      state: currentWorkplace.state?.trim() || "",
+      zipCode: currentWorkplace.zipCode?.trim() || "",
+      capacity: currentWorkplace.capacity?.trim() || "",
+      notes: currentWorkplace.notes?.trim() || "",
     }
 
-    setWorkplaces(updatedWorkplaces)
-    setLocalData("workplaces", updatedWorkplaces)
-    setIsDialogOpen(false)
+    try {
+      if (isEditing) {
+        await updateWorkplace(currentWorkplace.id, payload)
+        toast({ title: t.workplaceUpdated, description: "Ο χώρος εργασίας ενημερώθηκε με επιτυχία." })
+      } else {
+        await createWorkplace(payload)
+        toast({ title: t.workplaceAdded, description: "Ο χώρος εργασίας προστέθηκε με επιτυχία." })
+      }
+
+      setIsDialogOpen(false)
+      await loadWorkplaces()
+    } catch (e) {
+      console.error(e)
+      toast({ title: "Σφάλμα", description: "Δεν ήταν δυνατή η αποθήκευση.", variant: "destructive" })
+    }
   }
 
   return (
@@ -139,7 +148,9 @@ export default function WorkplacesPage() {
             data={workplaces}
             onAdd={handleAddNew}
             onEdit={handleEdit}
-            onDelete={handleDelete}
+            onDelete={(id: string) => {
+              if (confirm(t.confirmDelete)) handleDelete(id)
+            }}
             onSelect={setSelectedWorkplace}
           />
         </div>
@@ -199,9 +210,7 @@ export default function WorkplacesPage() {
                     variant="destructive"
                     size="sm"
                     onClick={() => {
-                      if (confirm(t.confirmDelete)) {
-                        handleDelete(selectedWorkplace.id)
-                      }
+                      if (confirm(t.confirmDelete)) handleDelete(selectedWorkplace.id)
                     }}
                     className="flex-1"
                   >
@@ -309,4 +318,3 @@ export default function WorkplacesPage() {
     </div>
   )
 }
-

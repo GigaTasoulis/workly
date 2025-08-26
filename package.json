@@ -9,7 +9,11 @@
     "start": "next start",
     "lint": "next lint",
     "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3001 && npx electron .\"",
-    "build:electron": "npm run build && electron-builder"
+    "build:electron": "npm run build && electron-builder",
+    "dev:cf": "wrangler pages dev out",
+    "migrate:local": "wrangler d1 migrations apply workly-dev --local",
+    "migrate:preview": "wrangler d1 migrations apply workly-preview --env preview --remote",
+    "migrate:prod": "wrangler d1 migrations apply workly-prod --env production --remote"
   },
   "build": {
     "appId": "com.example.myapp",

@@ -113,15 +113,15 @@ function apiLogToUi(w: ApiWorklog): UIWorklog {
   };
 }
 function uiLogToApi(input: Partial<UIWorklog>) {
-  return {
-    employee_id: input.employeeId?.trim(),
-    workplace_id: input.workplaceId?.trim(),
-    date: input.date?.trim(),
-    hours_worked: Number(input.hoursWorked ?? 0),
-    notes: input.notes?.trim(),
-    total_amount: Number(input.totalAmount ?? 0),
-    amount_paid: Number(input.amountPaid ?? 0),
-  };
+  const p: Record<string, any> = {};
+  if (input.employeeId !== undefined)   p.employee_id  = String(input.employeeId).trim();
+  if (input.workplaceId !== undefined)  p.workplace_id = String(input.workplaceId).trim();
+  if (input.date !== undefined)         p.date         = String(input.date).trim();
+  if (input.hoursWorked !== undefined)  p.hours_worked = Number(input.hoursWorked);
+  if (input.notes !== undefined)        p.notes        = String(input.notes).trim();
+  if (input.totalAmount !== undefined)  p.total_amount = Number(input.totalAmount);
+  if (input.amountPaid !== undefined)   p.amount_paid  = Number(input.amountPaid);
+  return p;
 }
 
 // ---------------- API helpers (same structure as suppliers) ----------------

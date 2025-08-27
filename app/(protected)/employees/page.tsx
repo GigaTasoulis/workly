@@ -1,64 +1,208 @@
-"use client"
+"use client";
 
-import type React from "react"
+import { useEffect, useMemo, useState } from "react";
+import { DataTable } from "@/components/data-table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/components/ui/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Briefcase, Mail, Phone, Building2, Calendar, FileText, Clock } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { translations as t } from "@/lib/translations";
 
-import { useState, useEffect } from "react"
-import { DataTable } from "@/components/data-table"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useToast } from "@/components/ui/use-toast"
-import { generateId, getLocalData, setLocalData } from "@/lib/utils"
-import { initializeData } from "@/lib/data"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Briefcase, Mail, Phone, Building2, Calendar, FileText, Clock, GraduationCap, Award } from "lucide-react"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Progress } from "@/components/ui/progress"
-import { translations as t } from "@/lib/translations" // Import translation keys
+// ---------------- Types (UI) ----------------
+type UIWorkplace = { id: string; name: string; address?: string };
 
-interface Employee {
-  id: string
-  firstName: string
-  lastName: string
-  email: string
-  phone: string
-  position: string
-  department: string
-  hireDate: string
-  workplaceId: string
-  notes: string
+type UIEmployee = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  position?: string;
+  department?: string;
+  hireDate?: string;    // YYYY-MM-DD
+  workplaceId?: string; // workplaces.id
+  notes?: string;
+  owed?: number;
+};
+
+type UIWorklog = {
+  id: string;
+  employeeId: string;
+  workplaceId: string;
+  date: string;           // YYYY-MM-DD
+  hoursWorked: number;
+  notes?: string;
+  totalAmount: number;
+  amountPaid: number;
+};
+
+// ---------------- Types (API) ----------------
+type ApiEmployee = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email?: string;
+  phone?: string;
+  position?: string;
+  department?: string;
+  hire_date?: string;
+  workplace_id?: string;
+  notes?: string;
+  created_at: string;
+};
+
+type ApiWorklog = {
+  id: string;
+  employee_id: string;
+  workplace_id: string;
+  date: string;
+  hours_worked: number;
+  notes?: string;
+  total_amount: number;
+  amount_paid: number;
+  created_at: string;
+};
+
+// ---------------- Mapping helpers ----------------
+function apiEmpToUi(e: ApiEmployee): UIEmployee {
+  return {
+    id: e.id,
+    firstName: e.first_name,
+    lastName: e.last_name,
+    email: e.email || "",
+    phone: e.phone || "",
+    position: e.position || "",
+    department: e.department || "",
+    hireDate: e.hire_date || "",
+    workplaceId: e.workplace_id || "",
+    notes: e.notes || "",
+  };
+}
+function uiEmpToApi(input: Partial<UIEmployee>) {
+  return {
+    first_name: input.firstName?.trim(),
+    last_name: input.lastName?.trim(),
+    email: input.email?.trim(),
+    phone: input.phone?.trim(),
+    position: input.position?.trim(),
+    department: input.department?.trim(),
+    hire_date: input.hireDate?.trim(),
+    workplace_id: input.workplaceId?.trim() || null,
+    notes: input.notes?.trim(),
+  };
 }
 
-interface WorkLog {
-  id: string
-  employeeId: string
-  workplaceId: string
-  date: string
-  hoursWorked: string
-  notes: string
-  totalAmount: number
-  amountPaid: number
+function apiLogToUi(w: ApiWorklog): UIWorklog {
+  return {
+    id: w.id,
+    employeeId: w.employee_id,
+    workplaceId: w.workplace_id,
+    date: w.date,
+    hoursWorked: Number(w.hours_worked) || 0,
+    notes: w.notes || "",
+    totalAmount: Number(w.total_amount) || 0,
+    amountPaid: Number(w.amount_paid) || 0,
+  };
+}
+function uiLogToApi(input: Partial<UIWorklog>) {
+  return {
+    employee_id: input.employeeId?.trim(),
+    workplace_id: input.workplaceId?.trim(),
+    date: input.date?.trim(),
+    hours_worked: Number(input.hoursWorked ?? 0),
+    notes: input.notes?.trim(),
+    total_amount: Number(input.totalAmount ?? 0),
+    amount_paid: Number(input.amountPaid ?? 0),
+  };
 }
 
-
-const initialEmployee: Employee = {
-  id: "",
-  firstName: "",
-  lastName: "",
-  email: "",
-  phone: "",
-  position: "",
-  department: "",
-  hireDate: "",
-  workplaceId: "",
-  notes: "",
+// ---------------- API helpers (same structure as suppliers) ----------------
+async function fetchWorkplaces(): Promise<UIWorkplace[]> {
+  const r = await fetch(`/api/workplaces`, { credentials: "include" });
+  if (!r.ok) throw new Error(await r.text());
+  const data = await r.json();
+  const list: any[] = data.workplaces || [];
+  return list.map(w => ({ id: w.id, name: w.name, address: w.address || "" }));
 }
 
+async function fetchEmployees(): Promise<UIEmployee[]> {
+  const r = await fetch(`/api/employees`, { credentials: "include" });
+  if (!r.ok) throw new Error(await r.text());
+  const data = await r.json();
+  const list: ApiEmployee[] = data.employees || [];
+  return list.map(apiEmpToUi);
+}
+async function createEmployeeApi(input: Partial<UIEmployee>): Promise<string> {
+  const r = await fetch(`/api/employees`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(uiEmpToApi(input)),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  const data = await r.json();
+  return data?.employee?.id as string;
+}
+async function updateEmployeeApi(id: string, input: Partial<UIEmployee>): Promise<void> {
+  const r = await fetch(`/api/employees/${id}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(uiEmpToApi(input)),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+async function deleteEmployeeApi(id: string): Promise<void> {
+  const r = await fetch(`/api/employees/${id}`, { method: "DELETE", credentials: "include" });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+async function fetchWorklogs(params?: { employeeId?: string; status?: "pending" | "paid"; from?: string; to?: string }): Promise<UIWorklog[]> {
+  const qs = new URLSearchParams();
+  if (params?.employeeId) qs.set("employeeId", params.employeeId);
+  if (params?.status) qs.set("status", params.status);
+  if (params?.from) qs.set("from", params.from);
+  if (params?.to) qs.set("to", params.to);
+  const r = await fetch(`/api/worklogs${qs.toString() ? `?${qs}` : ""}`, { credentials: "include" });
+  if (!r.ok) throw new Error(await r.text());
+  const data = await r.json();
+  const list: ApiWorklog[] = data.worklogs || [];
+  return list.map(apiLogToUi);
+}
+async function createWorklogApi(input: Partial<UIWorklog>): Promise<string> {
+  const r = await fetch(`/api/worklogs`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(uiLogToApi(input)),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  const data = await r.json();
+  return data?.worklog?.id as string;
+}
+async function updateWorklogApi(id: string, input: Partial<UIWorklog>): Promise<void> {
+  const r = await fetch(`/api/worklogs/${id}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(uiLogToApi(input)),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+async function deleteWorklogApi(id: string): Promise<void> {
+  const r = await fetch(`/api/worklogs/${id}`, { method: "DELETE", credentials: "include" });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+// ---------------- Component ----------------
 const departments = [
   t.management,
   t.sales,
@@ -70,295 +214,328 @@ const departments = [
   t.operations,
   t.researchDevelopment,
   t.legal,
-]
+];
+
+const emptyEmployee: UIEmployee = {
+  id: "",
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  position: "",
+  department: "",
+  hireDate: "",
+  workplaceId: "",
+  notes: "",
+};
+
+const emptyWorklog: UIWorklog = {
+  id: "",
+  employeeId: "",
+  workplaceId: "",
+  date: new Date().toISOString().slice(0, 10),
+  hoursWorked: 0,
+  notes: "",
+  totalAmount: 0,
+  amountPaid: 0,
+};
 
 export default function EmployeesPage() {
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [workplaces, setWorkplaces] = useState<any[]>([])
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [currentEmployee, setCurrentEmployee] = useState<Employee>(initialEmployee)
-  const [isEditing, setIsEditing] = useState(false)
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
+  const { toast } = useToast();
 
-  const [workLogs, setWorkLogs] = useState<WorkLog[]>([])
-  const [currentWorkLog, setCurrentWorkLog] = useState<WorkLog>({
-    id: "",
-    employeeId: "",
-    workplaceId: "",
-    date: "",
-    hoursWorked: "",
-    notes: "",
-    totalAmount: 0,
-    amountPaid: 0,
-  })
-  const [isWorkLogDialogOpen, setIsWorkLogDialogOpen] = useState(false)
-  const [isEditingWorkLog, setIsEditingWorkLog] = useState(false)
-  const [selectedEmployeeFilter, setSelectedEmployeeFilter] = useState<string>("all")
-  const [isPayDialogOpen, setIsPayDialogOpen] = useState(false)
-  const [workLogToPay, setWorkLogToPay] = useState<WorkLog | null>(null)
-  const [paymentAmount, setPaymentAmount] = useState<string>("")
-  const [currentPage, setCurrentPage] = useState(1)
-  const logsPerPage = 3
-  const [sortOrder, setSortOrder] = useState<string>("desc") 
-  const [filterStatus, setFilterStatus] = useState<string>("all")
-  const [currentWorkLogPage, setCurrentWorkLogPage] = useState(1);
-  const [workLogSortOrder, setWorkLogSortOrder] = useState<string>("desc");
-  const [workLogStatusFilter, setWorkLogStatusFilter] = useState<string>("all");
+  const [employees, setEmployees] = useState<UIEmployee[]>([]);
+  const [workplaces, setWorkplaces] = useState<UIWorkplace[]>([]);
+  const [worklogs, setWorklogs] = useState<UIWorklog[]>([]);
+
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentEmployee, setCurrentEmployee] = useState<UIEmployee>(emptyEmployee);
+  const [selectedEmployee, setSelectedEmployee] = useState<UIEmployee | null>(null);
+
+  const [isWorkLogDialogOpen, setIsWorkLogDialogOpen] = useState(false);
+  const [isEditingWorkLog, setIsEditingWorkLog] = useState(false);
+  const [currentWorkLog, setCurrentWorkLog] = useState<UIWorklog>(emptyWorklog);
+
+  const [empFilterStatus, setEmpFilterStatus] = useState<"all" | "paid" | "pending">("all");
+  const [empSortOrder, setEmpSortOrder] = useState<"desc" | "asc">("desc");
+  const [empPage, setEmpPage] = useState(1);
 
   const workLogsPerPage = 10;
-  
+
+  const [selectedEmployeeFilter, setSelectedEmployeeFilter] = useState<string>("all");
+  const [workLogStatusFilter, setWorkLogStatusFilter] = useState<"all"|"paid"|"pending">("all");
+  const [currentWorkLogPage, setCurrentWorkLogPage] = useState(1);
+
+  const [workLogSortOrder, setWorkLogSortOrder] = useState<"desc" | "asc">("desc");
 
 
 
-  const { toast } = useToast()
-
-  useEffect(() => {
-    // Initialize sample data if needed
-    if (typeof window !== "undefined") {
-      initializeData()
-    }
-
-    const employeesData = getLocalData("employees")
-    const workplacesData = getLocalData("workplaces")
-    setEmployees(employeesData)
-    setWorkplaces(workplacesData)
-  }, [])
-
-  useEffect(() => {
-    const storedLogs = getLocalData("worklogs") || []
-    setWorkLogs(storedLogs)
-  }, [])
-
-  
-  
+  // Columns for the DataTable
   const columns = [
     { key: "firstName", label: "Όνομα" },
     { key: "lastName", label: "Επώνυμο" },
     { key: "email", label: "Email" },
     { key: "position", label: "Θέση" },
     { key: "department", label: "Τμήμα" },
-  ]
+    { key: "owed", label: "Οφειλή (€)" },
+  ];
 
+  // --------- Initial load ----------
+  useEffect(() => {
+    (async () => {
+      try {
+        const [wps, emps, logs] = await Promise.all([
+          fetchWorkplaces(),
+          fetchEmployees(),
+          fetchWorklogs(),
+        ]);
+        setWorkplaces(wps);
+        setEmployees(emps);
+        setWorklogs(logs);
+      } catch (e) {
+        console.error(e);
+        toast({ title: "Σφάλμα", description: "Αποτυχία φόρτωσης δεδομένων.", variant: "destructive" });
+      }
+    })();
+  }, [toast]);
+
+  // --------- Helpers ----------
+  const getWorkplaceName = (workplaceId?: string) => {
+    if (!workplaceId) return "Not assigned";
+    return workplaces.find(w => w.id === workplaceId)?.name || "Not assigned";
+  };
+
+  const owedByEmployee = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const w of worklogs) {
+      const due = Math.max(0, (w.totalAmount || 0) - (w.amountPaid || 0));
+      m.set(w.employeeId, (m.get(w.employeeId) || 0) + due);
+    }
+    return m;
+  }, [worklogs]);
+  
+  const employeesForTable = useMemo(() => {
+    return employees.map(e => ({
+      ...e,
+      owed: Number((owedByEmployee.get(e.id) || 0).toFixed(2)),
+    }));
+  }, [employees, owedByEmployee]);
+  
+
+  const calculateTenure = (hireDate?: string) => {
+    if (!hireDate) return t.notSpecified;
+    const h = new Date(hireDate);
+    if (Number.isNaN(h.getTime())) return t.notSpecified;
+    const now = new Date();
+    let years = now.getFullYear() - h.getFullYear();
+    let months = now.getMonth() - h.getMonth();
+    if (months < 0) { years -= 1; months += 12; }
+    return `${years} ${t.years}, ${months} ${t.monthss}`;
+    };
+  
+  const filteredLogs = useMemo(() => {
+    let logs = worklogs; // <- this is the API-backed worklogs array already in the page
+    if (selectedEmployeeFilter !== "all") logs = logs.filter(l => l.employeeId === selectedEmployeeFilter);
+    if (workLogStatusFilter === "paid")    logs = logs.filter(l => l.amountPaid >= l.totalAmount);
+    if (workLogStatusFilter === "pending") logs = logs.filter(l => l.amountPaid < l.totalAmount);
+    return logs.slice().sort((a,b) =>
+      empSortOrder === "desc"
+        ? new Date(b.date).getTime() - new Date(a.date).getTime()
+        : new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+  }, [worklogs, selectedEmployeeFilter, workLogStatusFilter, empSortOrder]);
+  
+  const paginatedWorkLogs = useMemo(() => {
+    const start = (currentWorkLogPage - 1) * workLogsPerPage;
+    return filteredLogs.slice(start, start + workLogsPerPage);
+  }, [filteredLogs, currentWorkLogPage]);
+    
+
+  const filteredEmployeeLogs = useMemo(() => {
+    if (!selectedEmployee) return [];
+    let logs = worklogs.filter(l => l.employeeId === selectedEmployee.id);
+    if (empFilterStatus === "paid")   logs = logs.filter(l => l.amountPaid >= l.totalAmount);
+    if (empFilterStatus === "pending") logs = logs.filter(l => l.amountPaid < l.totalAmount);
+    logs.sort((a, b) =>
+      empSortOrder === "desc"
+        ? new Date(b.date).getTime() - new Date(a.date).getTime()
+        : new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    return logs;
+  }, [worklogs, selectedEmployee, empFilterStatus, empSortOrder]);
+  
+
+  const paginatedEmployeeLogs = useMemo(() => {
+    const start = (empPage - 1) * workLogsPerPage;
+    return filteredEmployeeLogs.slice(start, start + workLogsPerPage);
+  }, [filteredEmployeeLogs, empPage]);
+  
+
+  // --------- Employee CRUD ----------
   const handleAddNew = () => {
-    setCurrentEmployee(initialEmployee)
-    setIsEditing(false)
-    setIsDialogOpen(true)
-  }
+    setCurrentEmployee(emptyEmployee);
+    setIsEditing(false);
+    setIsDialogOpen(true);
+  };
 
-  const handleEdit = (employee: Employee) => {
-    setCurrentEmployee(employee)
-    setIsEditing(true)
-    setIsDialogOpen(true)
-  }
+  const handleEdit = (employee: UIEmployee) => {
+    setCurrentEmployee(employee);
+    setIsEditing(true);
+    setIsDialogOpen(true);
+  };
 
-  const handleDelete = (id: string) => {
-    const updatedEmployees = employees.filter((employee) => employee.id !== id)
-    setEmployees(updatedEmployees)
-    setLocalData("employees", updatedEmployees)
-
-    // If the deleted employee is currently selected, clear the selection
-    if (selectedEmployee && selectedEmployee.id === id) {
-      setSelectedEmployee(null)
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteEmployeeApi(id);
+      if (selectedEmployee?.id === id) setSelectedEmployee(null);
+      const fresh = await fetchEmployees();
+      setEmployees(fresh);
+      toast({ title: "Διαγράφηκε", description: "Ο υπάλληλος διαγράφηκε." });
+    } catch (e) {
+      console.error(e);
+      toast({ title: "Σφάλμα", description: "Αποτυχία διαγραφής.", variant: "destructive" });
     }
-  }
-  
+  };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!currentEmployee.firstName || !currentEmployee.lastName) {
-      toast({
-        title: "Error",
-        description: "First name, last name, and email are required fields.",
-        variant: "destructive",
-      })
-      return
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentEmployee.firstName?.trim() || !currentEmployee.lastName?.trim()) {
+      toast({ title: "Σφάλμα", description: "Όνομα και Επώνυμο είναι υποχρεωτικά.", variant: "destructive" });
+      return;
     }
-
-    let updatedEmployees: Employee[]
-
-    if (isEditing) {
-      updatedEmployees = employees.map((employee) => (employee.id === currentEmployee.id ? currentEmployee : employee))
-      toast({
-        title: t.employeeUpdated,
-        description: "Ο υπάλληλος ενημερώθηκε με επιτυχία.",
-      })
-
-      // Update selected employee if it's the one being edited
-      if (selectedEmployee && selectedEmployee.id === currentEmployee.id) {
-        setSelectedEmployee(currentEmployee)
+    try {
+      if (isEditing) {
+        await updateEmployeeApi(currentEmployee.id, currentEmployee);
+        toast({ title: t.employeeUpdated, description: "Ο υπάλληλος ενημερώθηκε." });
+      } else {
+        await createEmployeeApi(currentEmployee);
+        toast({ title: t.employeeAdded, description: "Ο υπάλληλος προστέθηκε." });
       }
-    } else {
-      const newEmployee = {
-        ...currentEmployee,
-        id: generateId(),
-      }
-      updatedEmployees = [...employees, newEmployee]
-      toast({
-        title: t.employeeAdded,
-        description: "Ο υπάλληλος προστέθηκε με επιτυχία.",
-      })
+      const fresh = await fetchEmployees();
+      setEmployees(fresh);
+      setIsDialogOpen(false);
+    } catch (e) {
+      console.error(e);
+      toast({ title: "Σφάλμα", description: "Αποτυχία αποθήκευσης υπαλλήλου.", variant: "destructive" });
     }
+  };
 
-    setEmployees(updatedEmployees)
-    setLocalData("employees", updatedEmployees)
-    setIsDialogOpen(false)
-  }
-
-  const handleRowClick = (employee: Employee) => {
-    setSelectedEmployee(employee)
-  }
-
-  // Find workplace name for the selected employee
-  const getWorkplaceName = (workplaceId: string) => {
-    const workplace = workplaces.find((wp) => wp.id === workplaceId)
-    return workplace ? workplace.name : "Not assigned"
-  }
-
-  // Calculate employee tenure
-  const calculateTenure = (hireDate: string) => {
-    if (!hireDate) return t.notSpecified
-
-    const hire = new Date(hireDate)
-    const now = new Date()
-
-    const yearDiff = now.getFullYear() - hire.getFullYear()
-    const monthDiff = now.getMonth() - hire.getMonth()
-
-    if (monthDiff < 0) {
-      return `${yearDiff - 1} ${t.years}, ${monthDiff + 12} ${t.monthss}`
-    }
-
-    return `${yearDiff} ${t.years}, ${monthDiff} ${t.monthss}`
-  }
-
+  // --------- Worklog CRUD + pay ----------
   const handleAddWorkLog = () => {
+    if (!selectedEmployee) {
+      toast({ title: "Σφάλμα", description: "Επιλέξτε υπάλληλο για καταγραφή.", variant: "destructive" });
+      return;
+    }
     setCurrentWorkLog({
-      id: "",
-      employeeId: selectedEmployee ? selectedEmployee.id : "",
-      workplaceId: "",
-      date: "",
-      hoursWorked: "",
-      notes: "",
-      totalAmount: 0,
-      amountPaid: 0,
-    })
-    setIsEditingWorkLog(false)
-    setIsWorkLogDialogOpen(true)
-  }
+      ...emptyWorklog,
+      employeeId: selectedEmployee.id,
+    });
+    setIsEditingWorkLog(false);
+    setIsWorkLogDialogOpen(true);
+  };
 
-  const handleEditWorkLog = (log: WorkLog) => {
-    setCurrentWorkLog(log)
-    setIsEditingWorkLog(true)
-    setIsWorkLogDialogOpen(true)
-  }
-
-  const handleDeleteWorkLog = (id: string) => {
-    if (confirm("Are you sure you want to delete this work log?")) {
-      const updatedLogs = workLogs.filter((log) => log.id !== id)
-      setWorkLogs(updatedLogs)
-      setLocalData("worklogs", updatedLogs)
+  const handleEditWorkLog = (log: UIWorklog) => {
+    if (isPaid(log)) {
       toast({
-        title: "Work Log deleted",
-        description: "Work log entry deleted successfully.",
-      })
-    }
-  }
-
-  const handleWorkLogSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!currentWorkLog.employeeId || !currentWorkLog.workplaceId || !currentWorkLog.date) {
-      toast({
-        title: "Error",
-        description: "Employee, workplace, and date are required.",
+        title: "Μη επεξεργάσιμο",
+        description: "Η καταγραφή είναι εξοφλημένη. Μπορείς μόνο να τη διαγράψεις.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
-    let updatedLogs: WorkLog[]
-    if (isEditingWorkLog) {
-      updatedLogs = workLogs.map((log) =>
-        log.id === currentWorkLog.id ? currentWorkLog : log
-      )
-      toast({
-        title: "Καταγραφή εργασίας ανανεώθηκε",
-        description: "Καταγραφή εργασίας ανανεώθηκε επιτυχώς.",
-      })
-    } else {
-      const newLog = { ...currentWorkLog, id: generateId() }
-      updatedLogs = [...workLogs, newLog]
-      toast({
-        title: "Καταγραφή εργασίας προστέθηκε!",
-        description: "Καταγραφή εργασίας προστέθηκε επιτυχώς.",
-      })
-    }
-    setWorkLogs(updatedLogs)
-    setLocalData("worklogs", updatedLogs)
-    setIsWorkLogDialogOpen(false)
-  }
+    setCurrentWorkLog(log);
+    setIsEditingWorkLog(true);
+    setIsWorkLogDialogOpen(true);
+  };
 
-  const handleOpenPayDialog = (log: WorkLog) => {
-    setWorkLogToPay(log)
-    setPaymentAmount("")
-    setIsPayDialogOpen(true)
-  }
-  
-  // Handler for submitting a payment
-  const handlePaySubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!workLogToPay) return
-    const remaining = workLogToPay.totalAmount - workLogToPay.amountPaid
-    const payment = parseFloat(paymentAmount)
-    if (isNaN(payment) || payment <= 0) {
-      toast({
-        title: "Error",
-        description: "Enter a valid payment amount.",
-        variant: "destructive",
-      })
-      return
+  const handleDeleteWorkLog = async (id: string) => {
+    if (!confirm("Να διαγραφεί αυτή η καταγραφή;")) return;
+    try {
+      await deleteWorklogApi(id);
+      const fresh = await fetchWorklogs();
+      setWorklogs(fresh);
+      toast({ title: "Διαγράφηκε", description: "Η καταγραφή διαγράφηκε." });
+    } catch (e) {
+      console.error(e);
+      toast({ title: "Σφάλμα", description: "Αποτυχία διαγραφής καταγραφής.", variant: "destructive" });
     }
-    if (payment > remaining) {
-      toast({
-        title: "Error",
-        description: `Payment cannot exceed the remaining amount (€${remaining}).`,
-        variant: "destructive",
-      })
-      return
-    }
-    // Update work log payment
-    const updatedLog = { ...workLogToPay, amountPaid: workLogToPay.amountPaid + payment }
-    const updatedLogs = workLogs.map((log) => log.id === updatedLog.id ? updatedLog : log)
-    setWorkLogs(updatedLogs)
-    setLocalData("worklogs", updatedLogs)
-    toast({
-      title: "Payment recorded",
-      description: `€${payment} payment recorded.`,
-    })
-    setIsPayDialogOpen(false)
-  }
+  };
 
-
-  let filteredLogs = workLogs;
-  if (selectedEmployeeFilter !== "all") {
-    filteredLogs = filteredLogs.filter((log) => log.employeeId === selectedEmployeeFilter);
-  }
-  if (workLogStatusFilter !== "all") {
-    if (workLogStatusFilter === "paid") {
-      filteredLogs = filteredLogs.filter((log) => log.amountPaid === log.totalAmount);
-    } else if (workLogStatusFilter === "pending") {
-      filteredLogs = filteredLogs.filter((log) => log.amountPaid < log.totalAmount);
+  const handleWorkLogSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const w = currentWorkLog;
+    if (!w.employeeId || !w.workplaceId || !w.date) {
+      toast({ title: "Σφάλμα", description: "Υπάλληλος, Χώρος εργασίας και Ημ/νία απαιτούνται.", variant: "destructive" });
+      return;
     }
-  }
-  filteredLogs.sort((a, b) =>
-    workLogSortOrder === "desc"
-      ? new Date(b.date).getTime() - new Date(a.date).getTime()
-      : new Date(a.date).getTime() - new Date(b.date).getTime()
-  );
-  const startIndex = (currentWorkLogPage - 1) * workLogsPerPage;
-  const paginatedWorkLogs = filteredLogs.slice(startIndex, startIndex + workLogsPerPage);
+    try {
+      if (isEditingWorkLog && w.id) {
+        await updateWorklogApi(w.id, w);
+        toast({ title: "Ενημερώθηκε", description: "Η καταγραφή ενημερώθηκε." });
+      } else {
+        await createWorklogApi(w);
+        toast({ title: "Προστέθηκε", description: "Η καταγραφή προστέθηκε." });
+      }
+      const fresh = await fetchWorklogs();
+      setWorklogs(fresh);
+      setIsWorkLogDialogOpen(false);
+    } catch (e) {
+      console.error(e);
+      toast({ title: "Σφάλμα", description: "Αποτυχία αποθήκευσης καταγραφής.", variant: "destructive" });
+    }
+  };
+
+  // simple “pay” flow: add amount to amountPaid
+  const [isPayDialogOpen, setIsPayDialogOpen] = useState(false);
+  const [workLogToPay, setWorkLogToPay] = useState<UIWorklog | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState<string>("");
+
+  const handleOpenPayDialog = (log: UIWorklog) => {
+    setWorkLogToPay(log);
+    setPaymentAmount("");
+    setIsPayDialogOpen(true);
+  };
+
+  const isPaid = (w: Pick<UIWorklog, "amountPaid" | "totalAmount">) =>
+    Number(w.amountPaid || 0) >= Number(w.totalAmount || 0);
   
 
+  const handleAddWorkLogGlobal = () => {
+    if (selectedEmployeeFilter !== "all") {
+      const emp = employees.find(e => e.id === selectedEmployeeFilter);
+      if (emp) setSelectedEmployee(emp);
+    }
+    handleAddWorkLog();
+  };
 
+  const handlePaySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!workLogToPay) return;
+    
+    const remaining = workLogToPay.totalAmount - workLogToPay.amountPaid;
+    const payment = parseFloat(paymentAmount);
+    if (!Number.isFinite(payment) || payment <= 0 || payment > remaining) {
+      toast({ title: "Σφάλμα", description: `Μη έγκυρο ποσό (μέχρι €${remaining}).`, variant: "destructive" });
+      return;
+    }
+    const newPaid = Math.min(
+      workLogToPay.totalAmount,
+      Number((workLogToPay.amountPaid + payment).toFixed(2))
+    );
+    
+    try {
+      await updateWorklogApi(workLogToPay.id, { amountPaid: newPaid });
+      const fresh = await fetchWorklogs();
+      setWorklogs(fresh);
+      setIsPayDialogOpen(false);
+      toast({ title: "Καταγράφηκε", description: `Πληρωμή €${payment}.` });
+    } catch (e) {
+      console.error(e);
+      toast({ title: "Σφάλμα", description: "Αποτυχία καταγραφής πληρωμής.", variant: "destructive" });
+    }
+  };
+
+  // --------- UI ---------
   return (
     <div className="space-y-6">
       <div>
@@ -370,11 +547,11 @@ export default function EmployeesPage() {
         <div className="md:col-span-2">
           <DataTable
             columns={columns}
-            data={employees}
+            data={employeesForTable}
             onAdd={handleAddNew}
             onEdit={handleEdit}
             onDelete={handleDelete}
-            onSelect={setSelectedEmployee}
+            onSelect={(e: UIEmployee) => setSelectedEmployee(e)}
           />
         </div>
 
@@ -386,8 +563,8 @@ export default function EmployeesPage() {
                   <div className="flex items-center gap-3">
                     <Avatar className="h-12 w-12">
                       <AvatarFallback className="bg-primary text-primary-foreground">
-                        {selectedEmployee.firstName.charAt(0)}
-                        {selectedEmployee.lastName.charAt(0)}
+                        {selectedEmployee.firstName?.[0] || "?"}
+                        {selectedEmployee.lastName?.[0] || "?"}
                       </AvatarFallback>
                     </Avatar>
                     <div>
@@ -399,7 +576,7 @@ export default function EmployeesPage() {
                   </div>
                   <Badge variant="outline" className="ml-2">
                     <Briefcase className="h-3 w-3 mr-1" />
-                    {selectedEmployee.department}
+                    {selectedEmployee.department || "-"}
                   </Badge>
                 </div>
               </CardHeader>
@@ -417,11 +594,11 @@ export default function EmployeesPage() {
                       <div className="grid gap-2">
                         <div className="flex items-center text-sm">
                           <Mail className="h-4 w-4 mr-2 text-muted-foreground" />
-                          {selectedEmployee.email}
+                          {selectedEmployee.email || "—"}
                         </div>
                         <div className="flex items-center text-sm">
                           <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
-                          {selectedEmployee.phone || "Not provided"}
+                          {selectedEmployee.phone || "—"}
                         </div>
                       </div>
                     </div>
@@ -434,7 +611,7 @@ export default function EmployeesPage() {
                       </div>
                     </div>
 
-                    {selectedEmployee.notes && (
+                    {selectedEmployee.notes ? (
                       <div className="space-y-2">
                         <h3 className="text-sm font-medium">Σημειώσεις</h3>
                         <div className="flex items-start text-sm">
@@ -442,28 +619,21 @@ export default function EmployeesPage() {
                           <span>{selectedEmployee.notes}</span>
                         </div>
                       </div>
-                    )}
+                    ) : null}
 
                     <div className="flex space-x-2 pt-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(selectedEmployee)}
-                        className="flex-1"
-                      >
-                        Edit
+                      <Button variant="outline" size="sm" onClick={() => handleEdit(selectedEmployee)} className="flex-1">
+                        Επεξεργασία
                       </Button>
                       <Button
                         variant="destructive"
                         size="sm"
                         onClick={() => {
-                          if (confirm("Are you sure you want to delete this employee?")) {
-                            handleDelete(selectedEmployee.id)
-                          }
+                          if (confirm("Να διαγραφεί αυτός ο υπάλληλος;")) handleDelete(selectedEmployee.id);
                         }}
                         className="flex-1"
                       >
-                        Delete
+                        Διαγραφή
                       </Button>
                     </div>
                   </TabsContent>
@@ -473,7 +643,7 @@ export default function EmployeesPage() {
                       <h3 className="text-sm font-medium">Ημ/νία Πρόσληψης</h3>
                       <div className="flex items-center text-sm">
                         <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
-                        {selectedEmployee.hireDate || "Not specified"}
+                        {selectedEmployee.hireDate || "—"}
                       </div>
                     </div>
 
@@ -485,94 +655,82 @@ export default function EmployeesPage() {
                       </div>
                     </div>
                   </TabsContent>
+
                   <TabsContent value="history" className="space-y-4 pt-4">
-                    {selectedEmployee ? (
-                      <div>
-                        {/* Filter and Paginate Logs */}
-                        {(() => {
-                          // Filter by employee and status
-                          let logs = workLogs.filter(log => log.employeeId === selectedEmployee.id)
-                          if (filterStatus === "paid") {
-                            logs = logs.filter(log => log.amountPaid === log.totalAmount)
-                          } else if (filterStatus === "pending") {
-                            logs = logs.filter(log => log.amountPaid < log.totalAmount)
-                          }
+                    <div className="flex gap-4 mb-4">
+                      <Select
+                        value={empSortOrder}
+                        onValueChange={(v: "asc" | "desc") => { setEmpSortOrder(v); setEmpPage(1); }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Ταξινόμηση" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="desc">Πιο πρόσφατες</SelectItem>
+                          <SelectItem value="asc">Παλαιότερες</SelectItem>
+                        </SelectContent>
+                      </Select>
 
-                          logs.sort((a, b) =>
-                            sortOrder === "desc"
-                              ? new Date(b.date).getTime() - new Date(a.date).getTime()
-                              : new Date(a.date).getTime() - new Date(b.date).getTime()
-                          )
+                      <Select
+                        value={empFilterStatus}
+                        onValueChange={(v: "all" | "paid" | "pending") => { setEmpFilterStatus(v); setEmpPage(1); }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Κατάσταση" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Όλες</SelectItem>
+                          <SelectItem value="paid">Πληρωμένες</SelectItem>
+                          <SelectItem value="pending">Εκκρεμείς</SelectItem>
+                        </SelectContent>
+                      </Select>
 
-                          const totalPages = Math.ceil(logs.length / logsPerPage)
-                          const startIndex = (currentPage - 1) * logsPerPage
-                          const paginatedLogs = logs.slice(startIndex, startIndex + logsPerPage)
+                      <Button onClick={handleAddWorkLogGlobal} className="ml-auto" size="sm">
+                        Προσθήκη Ωρών
+                      </Button>
+                    </div>
 
-                          return (
-                            <div className="space-y-4">
-                              <div className="flex gap-4 mb-4">
-                                <Select value={sortOrder} onValueChange={(value) => { setSortOrder(value); setCurrentPage(1) }}>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Sort by Date" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="desc">Πιο πρόσφατες</SelectItem>
-                                    <SelectItem value="asc">Παλαιότερες</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <Select value={filterStatus} onValueChange={(value) => { setFilterStatus(value); setCurrentPage(1) }}>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Filter by Status" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="all">Όλες</SelectItem>
-                                    <SelectItem value="paid">Πληρωμένες</SelectItem>
-                                    <SelectItem value="pending">Εκκρεμείς</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              {paginatedLogs.map(log => (
-                                <div key={log.id} className="border p-2 rounded-md">
-                                  <p><strong>Ημ/νία:</strong> {log.date}</p>
-                                  <p><strong>Ώρες:</strong> {log.hoursWorked}</p>
-                                  <p><strong>Χώρος Εργασίας:</strong> {getWorkplaceName(log.workplaceId)}</p>
-                                  <p>
-                                    <strong>Πληρωμή:</strong> {`${log.amountPaid} / ${log.totalAmount}`}
-                                    {log.amountPaid === log.totalAmount ? (
-                                      <Badge className="bg-green-100 text-green-800 ml-2">Πληρωμένη</Badge>
-                                    ) : (
-                                      <Badge className="bg-yellow-100 text-yellow-800 ml-2">Εκκρεμή</Badge>
-                                    )}
-                                  </p>
-                                </div>
-                              ))}
-                              {/* Pagination Controls */}
-                              <div className="flex justify-center items-center mt-4 space-x-4">
-                                <Button
-                                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
-                                  disabled={currentPage === 1}
-                                  onClick={() => setCurrentPage(currentPage - 1)}
-                                >
-                                  ←
-                                </Button>
-                                <span className="text-sm font-medium">
-                                  {currentPage} / {totalPages}
-                                </span>
-                                <Button
-                                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
-                                  disabled={currentPage === totalPages || totalPages === 0}
-                                  onClick={() => setCurrentPage(currentPage + 1)}
-                                >
-                                  →
-                                </Button>
-                              </div>
-                            </div>
-                          )
-                        })()}
+                    {paginatedEmployeeLogs.map((log) => (
+                      <div key={log.id} className="border p-2 rounded-md">
+                        <p><strong>Ημ/νία:</strong> {log.date}</p>
+                        <p><strong>Ώρες:</strong> {log.hoursWorked}</p>
+                        <p><strong>Χώρος Εργασίας:</strong> {getWorkplaceName(log.workplaceId)}</p>
+                        <p>
+                          <strong>Πληρωμή:</strong> {`${log.amountPaid} / ${log.totalAmount}`}
+                          {log.amountPaid >= log.totalAmount ? (
+                            <Badge className="bg-green-100 text-green-800 ml-2">Πληρωμένη</Badge>
+                          ) : (
+                            <Badge className="bg-yellow-100 text-yellow-800 ml-2">Εκκρεμή</Badge>
+                          )}
+                        </p>
+                        <div className="flex gap-2 mt-2">
+                          {!isPaid(log) && (
+                            <Button size="sm" variant="outline" onClick={() => handleEditWorkLog(log)}>
+                              Επεξεργασία
+                            </Button>
+                          )}
+                          {!isPaid(log) && (log.totalAmount - log.amountPaid) > 0 && (
+                            <Button size="sm" variant="secondary" onClick={() => handleOpenPayDialog(log)}>
+                              Πληρωμή
+                            </Button>
+                          )}
+                          <Button size="sm" variant="destructive" onClick={() => handleDeleteWorkLog(log.id)}>Διαγραφή</Button>
+                        </div>
                       </div>
-                    ) : (
-                      <p>Δεν έχει επιλεχθεί εργαζόμενος.</p>
-                    )}
+                    ))}
+
+                    <div className="flex justify-center items-center mt-4 space-x-4">
+                      <Button disabled={empPage === 1} onClick={() => setEmpPage(p => p - 1)}>←</Button>
+                      <span className="text-sm font-medium">
+                        {empPage} / {Math.max(1, Math.ceil(filteredEmployeeLogs.length / workLogsPerPage))}
+                      </span>
+                      <Button
+                        disabled={empPage >= Math.ceil(filteredEmployeeLogs.length / workLogsPerPage)}
+                        onClick={() => setEmpPage(p => p + 1)}
+                      >
+                        →
+                      </Button>
+                    </div>
                   </TabsContent>
                 </Tabs>
               </CardContent>
@@ -593,166 +751,8 @@ export default function EmployeesPage() {
           )}
         </div>
       </div>
-      <div className="mt-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold tracking-tight">Καταγραφή Εργασίας</h2>
-          <Button onClick={handleAddWorkLog}>Προσθήκη Ωρών</Button>
-        </div>
-        <div className="flex gap-4 mb-4">
-          <Select
-            value={selectedEmployeeFilter}
-            onValueChange={(value) => { 
-              setSelectedEmployeeFilter(value); 
-              setCurrentWorkLogPage(1); 
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Filter by Employee" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Όλοι</SelectItem>
-              {employees.map((emp) => (
-                <SelectItem key={emp.id} value={emp.id}>
-                  {emp.firstName} {emp.lastName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {/* Status Filter */}
-          <Select
-            value={workLogStatusFilter}
-            onValueChange={(value) => { 
-              setWorkLogStatusFilter(value); 
-              setCurrentWorkLogPage(1); 
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Filter by Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Όλα</SelectItem>
-              <SelectItem value="paid">Πληρωμένη</SelectItem>
-              <SelectItem value="pending">Εκκρεμή</SelectItem>
-            </SelectContent>
-          </Select>
-          {/* Sort Order Filter */}
-          <Select
-            value={workLogSortOrder}
-            onValueChange={(value) => { 
-              setWorkLogSortOrder(value); 
-              setCurrentWorkLogPage(1); 
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Sort by Date" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="desc">Νεότερα</SelectItem>
-              <SelectItem value="asc">Παλαιότερα</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-800">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Υπαλληλος
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Χωρος εργασιας
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Ημ/νια
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Ωρες Εργασιας
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Πληρωμη
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Σημειωσεις
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Ενεργειες
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-              {paginatedWorkLogs.map((log) => {
-                const employee = employees.find((emp) => emp.id === log.employeeId);
-                return (
-                  <tr key={log.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
-                      {employee ? `${employee.firstName} ${employee.lastName}` : "Unknown"}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
-                      {getWorkplaceName(log.workplaceId)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
-                      {log.date}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
-                      {log.hoursWorked}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
-                      {`${log.amountPaid} / ${log.totalAmount}`}
-                      {log.amountPaid === log.totalAmount ? (
-                        <Badge className="bg-green-100 text-green-800 ml-2 dark:bg-green-800 dark:text-green-100">
-                          Πληρωμένη
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-yellow-100 text-yellow-800 ml-2 dark:bg-yellow-800 dark:text-yellow-100">
-                          Εκκρεμή
-                        </Badge>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
-                      {log.notes}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => handleEditWorkLog(log)}>
-                          Επεξεργασία
-                        </Button>
-                        {(log.totalAmount - log.amountPaid) > 0 && (
-                          <Button size="sm" variant="secondary" onClick={() => handleOpenPayDialog(log)}>
-                            Πληρωμή
-                          </Button>
-                        )}
-                        <Button size="sm" variant="destructive" onClick={() => handleDeleteWorkLog(log.id)}>
-                          Διαγραφή
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div className="flex justify-center items-center mt-4 space-x-4">
-            <Button
-              className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
-              disabled={currentWorkLogPage === 1}
-              onClick={() => setCurrentWorkLogPage(currentWorkLogPage - 1)}
-            >
-              ←
-            </Button>
-            <span className="text-sm font-medium">
-              {currentWorkLogPage} / {Math.ceil(filteredLogs.length / workLogsPerPage)}
-            </span>
-            <Button
-              className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
-              disabled={currentWorkLogPage === Math.ceil(filteredLogs.length / workLogsPerPage) || Math.ceil(filteredLogs.length / workLogsPerPage) === 0}
-              onClick={() => setCurrentWorkLogPage(currentWorkLogPage + 1)}
-            >
-              →
-            </Button>
-          </div>
-        </div>
-      </div>
 
+      {/* Employee Add/Edit */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
@@ -780,6 +780,7 @@ export default function EmployeesPage() {
                   />
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">{t.email}</Label>
@@ -799,6 +800,7 @@ export default function EmployeesPage() {
                   />
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="position">{t.position}</Label>
@@ -811,11 +813,11 @@ export default function EmployeesPage() {
                 <div className="space-y-2">
                   <Label htmlFor="department">{t.department}</Label>
                   <Select
-                    value={currentEmployee.department}
+                    value={currentEmployee.department || ""}
                     onValueChange={(value) => setCurrentEmployee({ ...currentEmployee, department: value })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select department" />
+                      <SelectValue placeholder="Επιλογή τμήματος" />
                     </SelectTrigger>
                     <SelectContent>
                       {departments.map((dept) => (
@@ -827,13 +829,14 @@ export default function EmployeesPage() {
                   </Select>
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="hireDate">{t.hireDate}</Label>
                   <Input
                     id="hireDate"
                     type="date"
-                    className=" dark:bg-gray-200 dark:text-gray-900"
+                    className="dark:bg-gray-200 dark:text-gray-900"
                     value={currentEmployee.hireDate}
                     onChange={(e) => setCurrentEmployee({ ...currentEmployee, hireDate: e.target.value })}
                   />
@@ -841,22 +844,23 @@ export default function EmployeesPage() {
                 <div className="space-y-2">
                   <Label htmlFor="workplaceId">{t.workplace}</Label>
                   <Select
-                    value={currentEmployee.workplaceId}
+                    value={currentEmployee.workplaceId || ""}
                     onValueChange={(value) => setCurrentEmployee({ ...currentEmployee, workplaceId: value })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select a workplace" />
+                      <SelectValue placeholder="Επιλογή χώρου εργασίας" />
                     </SelectTrigger>
                     <SelectContent>
-                      {workplaces.map((workplace) => (
-                        <SelectItem key={workplace.id} value={workplace.id}>
-                          {workplace.name}
+                      {workplaces.map((wp) => (
+                        <SelectItem key={wp.id} value={wp.id}>
+                          {wp.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="notes">{t.notes}</Label>
                 <Textarea
@@ -876,6 +880,8 @@ export default function EmployeesPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Worklog Add/Edit */}
       <Dialog open={isWorkLogDialogOpen} onOpenChange={setIsWorkLogDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
@@ -884,12 +890,10 @@ export default function EmployeesPage() {
           <form onSubmit={handleWorkLogSubmit}>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="worklog-employee">Εργαζόμενος</Label>
+                <Label>Εργαζόμενος</Label>
                 <Select
                   value={currentWorkLog.employeeId}
-                  onValueChange={(value) =>
-                    setCurrentWorkLog({ ...currentWorkLog, employeeId: value })
-                  }
+                  onValueChange={(value) => setCurrentWorkLog({ ...currentWorkLog, employeeId: value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Επιλογή Εργαζόμενου" />
@@ -903,14 +907,12 @@ export default function EmployeesPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {/* Replace free-text location with workplace selection */}
+
               <div className="space-y-2">
-                <Label htmlFor="worklog-workplace">Χώρος Εργασίας</Label>
+                <Label>Χώρος Εργασίας</Label>
                 <Select
                   value={currentWorkLog.workplaceId}
-                  onValueChange={(value) =>
-                    setCurrentWorkLog({ ...currentWorkLog, workplaceId: value })
-                  }
+                  onValueChange={(value) => setCurrentWorkLog({ ...currentWorkLog, workplaceId: value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Επιλογή Χώρου Εργασίας" />
@@ -924,48 +926,44 @@ export default function EmployeesPage() {
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="worklog-date">Ημ/νία</Label>
+                <Label>Ημ/νία</Label>
                 <Input
-                  id="worklog-date"
                   type="date"
-                  className=" dark:bg-gray-200 dark:text-gray-900"
+                  className="dark:bg-gray-200 dark:text-gray-900"
                   value={currentWorkLog.date}
-                  onChange={(e) =>
-                    setCurrentWorkLog({ ...currentWorkLog, date: e.target.value })
-                  }
+                  onChange={(e) => setCurrentWorkLog({ ...currentWorkLog, date: e.target.value })}
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="worklog-hours">Ώρες Εργασίας</Label>
+                <Label>Ώρες Εργασίας</Label>
                 <Input
-                  id="worklog-hours"
                   type="number"
-                  value={currentWorkLog.hoursWorked}
-                  onChange={(e) =>
-                    setCurrentWorkLog({ ...currentWorkLog, hoursWorked: e.target.value })
-                  }
+                  inputMode="decimal"
+                  step="0.01"
+                  value={Number.isFinite(currentWorkLog.hoursWorked) ? String(currentWorkLog.hoursWorked) : ""}
+                  onChange={(e) => setCurrentWorkLog({ ...currentWorkLog, hoursWorked: parseFloat(e.target.value || "0") })}
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="worklog-total-amount">Συνολικό Ποσό (€)</Label>
+                <Label>Συνολικό Ποσό (€)</Label>
                 <Input
-                  id="worklog-total-amount"
                   type="number"
-                  value={currentWorkLog.totalAmount}
-                  onChange={(e) =>
-                    setCurrentWorkLog({ ...currentWorkLog, totalAmount: parseFloat(e.target.value) })
-                  }
+                  inputMode="decimal"
+                  step="0.01"
+                  value={String(currentWorkLog.totalAmount)}
+                  onChange={(e) => setCurrentWorkLog({ ...currentWorkLog, totalAmount: parseFloat(e.target.value || "0") })}
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="worklog-notes">Σημειώσεις</Label>
+                <Label>Σημειώσεις</Label>
                 <Textarea
-                  id="worklog-notes"
-                  value={currentWorkLog.notes}
-                  onChange={(e) =>
-                    setCurrentWorkLog({ ...currentWorkLog, notes: e.target.value })
-                  }
+                  value={currentWorkLog.notes || ""}
+                  onChange={(e) => setCurrentWorkLog({ ...currentWorkLog, notes: e.target.value })}
                   rows={3}
                 />
               </div>
@@ -979,6 +977,8 @@ export default function EmployeesPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Pay dialog */}
       <Dialog open={isPayDialogOpen} onOpenChange={setIsPayDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
@@ -989,16 +989,18 @@ export default function EmployeesPage() {
               {workLogToPay && (
                 <>
                   <div>
-                    <p>Υπολοιπόμενο ποσό: {workLogToPay.totalAmount - workLogToPay.amountPaid}</p>
+                    <p><strong>Υπόλοιπο:</strong> {workLogToPay.totalAmount - workLogToPay.amountPaid}</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="payment-amount">Ποσό πληρωμής (€)</Label>
                     <Input
                       id="payment-amount"
                       type="number"
+                      inputMode="decimal"
+                      step="0.01"
                       value={paymentAmount}
                       onChange={(e) => setPaymentAmount(e.target.value)}
-                      placeholder={`Εισάγετε ποσό ( μέγιστο €${workLogToPay.totalAmount - workLogToPay.amountPaid} )`}
+                      placeholder={`Μέγιστο €${workLogToPay.totalAmount - workLogToPay.amountPaid}`}
                     />
                   </div>
                 </>
@@ -1013,7 +1015,147 @@ export default function EmployeesPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
-  )
-}
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold tracking-tight">Καταγραφή Εργασίας</h2>
+          <Button onClick={handleAddWorkLogGlobal}>Προσθήκη Ωρών</Button>
+        </div>
+        <div className="flex gap-4 mb-4">
+          <Select
+            value={selectedEmployeeFilter}
+            onValueChange={(value) => {
+              setSelectedEmployeeFilter(value);
+              setCurrentWorkLogPage(1);
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Filter by Employee" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Όλοι</SelectItem>
+              {employees.map((emp) => (
+                <SelectItem key={emp.id} value={emp.id}>
+                  {emp.firstName} {emp.lastName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={workLogStatusFilter}
+            onValueChange={(value) => {
+              setWorkLogStatusFilter(value as "all" | "paid" | "pending");
+              setCurrentWorkLogPage(1);
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Filter by Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Όλα</SelectItem>
+              <SelectItem value="paid">Πληρωμένη</SelectItem>
+              <SelectItem value="pending">Εκκρεμή</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={empSortOrder}
+            onValueChange={(value) => {
+              setWorkLogSortOrder(value as "desc" | "asc");
+              setCurrentWorkLogPage(1);
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Sort by Date" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc">Νεότερα</SelectItem>
+              <SelectItem value="asc">Παλαιότερα</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-800">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Υπαλληλος</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Χωρος εργασιας</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ημ/νια</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ωρες Εργασιας</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Πληρωμη</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Σημειωσεις</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ενεργειες</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+              {paginatedWorkLogs.map((log) => {
+                const employee = employees.find((emp) => emp.id === log.employeeId);
+                return (
+                  <tr key={log.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
+                      {employee ? `${employee.firstName} ${employee.lastName}` : "Unknown"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
+                      {getWorkplaceName(log.workplaceId)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
+                      {log.date}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
+                      {log.hoursWorked}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
+                      {`${log.amountPaid} / ${log.totalAmount}`}
+                      {log.amountPaid >= log.totalAmount ? (
+                        <Badge className="bg-green-100 text-green-800 ml-2 dark:bg-green-800 dark:text-green-100">Πληρωμένη</Badge>
+                      ) : (
+                        <Badge className="bg-yellow-100 text-yellow-800 ml-2 dark:bg-yellow-800 dark:text-yellow-100">Εκκρεμή</Badge>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
+                      {log.notes}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
+                      <div className="flex gap-2">
+                        {!isPaid(log) && (
+                          <Button size="sm" variant="outline" onClick={() => handleEditWorkLog(log)}>
+                            Επεξεργασία
+                          </Button>
+                        )}
+                        {!isPaid(log) && (log.totalAmount - log.amountPaid) > 0 && (
+                          <Button size="sm" variant="secondary" onClick={() => handleOpenPayDialog(log)}>
+                            Πληρωμή
+                          </Button>
+                        )}
+                        <Button size="sm" variant="destructive" onClick={() => handleDeleteWorkLog(log.id)}>Διαγραφή</Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <div className="flex justify-center items-center mt-4 space-x-4">
+            <Button
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
+              disabled={currentWorkLogPage === 1}
+              onClick={() => setCurrentWorkLogPage(currentWorkLogPage - 1)}
+            >
+              ←
+            </Button>
+            <span className="text-sm font-medium">
+              {currentWorkLogPage} / {Math.ceil(filteredLogs.length / workLogsPerPage)}
+            </span>
+            <Button
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
+              disabled={currentWorkLogPage === Math.ceil(filteredLogs.length / workLogsPerPage) || Math.ceil(filteredLogs.length / workLogsPerPage) === 0}
+              onClick={() => setCurrentWorkLogPage(currentWorkLogPage + 1)}
+            >
+              →
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

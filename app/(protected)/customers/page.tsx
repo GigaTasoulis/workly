@@ -19,6 +19,64 @@ import { TransactionList } from "@/components/TransactionList"
 import { format } from "date-fns"
 import { translations as t } from "@/lib/translations"
 
+function uiCustomerToApi(c: Partial<Customer>) {
+  return {
+    name: c.name?.trim(),
+    contact_person: c.contactPerson?.trim(),
+    email: c.email?.trim(),
+    phone: c.phone?.trim(),
+    address: c.address?.trim(),
+    afm: c.afm?.trim(),
+    tractor: c.tractor?.trim(),
+    notes: c.notes?.trim(),
+  };
+}
+function apiRowToCustomer(r: any): Customer {
+  return {
+    id: r.id,
+    name: r.name || "",
+    contactPerson: r.contact_person || "",
+    email: r.email || "",
+    phone: r.phone || "",
+    address: r.address || "",
+    afm: r.afm || "",
+    tractor: r.tractor || "",
+    notes: r.notes || "",
+  };
+}
+
+async function fetchCustomersApi(): Promise<Customer[]> {
+  const r = await fetch(`/api/customers`, { credentials: "include" });
+  if (!r.ok) throw new Error(await r.text());
+  const data = await r.json();
+  const list: any[] = data.customers || [];
+  return list.map(apiRowToCustomer);
+}
+async function createCustomerApi(input: Partial<Customer>): Promise<string> {
+  const r = await fetch(`/api/customers`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(uiCustomerToApi(input)),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  const data = await r.json();
+  return data?.customer?.id as string;
+}
+async function updateCustomerApi(id: string, input: Partial<Customer>): Promise<void> {
+  const r = await fetch(`/api/customers/${id}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(uiCustomerToApi(input)),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+async function deleteCustomerApi(id: string): Promise<void> {
+  const r = await fetch(`/api/customers/${id}`, { method: "DELETE", credentials: "include" });
+  if (!r.ok) throw new Error(await r.text());
+}
+
 interface Customer {
   id: string
   name: string
@@ -106,13 +164,21 @@ export default function CustomersPage() {
 
 
   useEffect(() => {
-    const customersData = getLocalData("customers") || [];
-    const transactionsData = getLocalData("transactions") || [];
-    const storedPayments = getLocalData("payments") || [];
-    setCustomers(customersData);
-    setTransactions(transactionsData);
-    setPayments(storedPayments);
-  }, []);
+    (async () => {
+      try {
+        const [serverCustomers] = await Promise.all([
+          fetchCustomersApi(),
+        ]);
+        setCustomers(serverCustomers);
+        setTransactions(getLocalData("transactions") || []);
+        setPayments(getLocalData("payments") || []);
+      } catch (e) {
+        console.error(e);
+        toast({ title: "Σφάλμα", description: "Αποτυχία φόρτωσης πελατών.", variant: "destructive" });
+      }
+    })();
+  }, [toast]);
+  
 
   const columns = [
     { key: "name", label: t.customerName },
@@ -203,22 +269,17 @@ export default function CustomersPage() {
     setIsDialogOpen(true)
   }
 
-  const handleDelete = (id: string) => {
-    const deletedName = selectedCustomer ? selectedCustomer.name : "";
-    const updatedCustomers = customers.filter((customer) => customer.id !== id)
-    setCustomers(updatedCustomers)
-    setLocalData("customers", updatedCustomers)
-    logActivity({
-      type: "customer",
-      action: t.customerDeleted,
-      name: deletedName,
-      time: "Just now",
-      iconKey: "users",
-      iconColor: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
-      avatar: "/placeholder.svg",
-    });
-    
-  }
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteCustomerApi(id);
+      const fresh = await fetchCustomersApi();
+      setCustomers(fresh);
+      toast({ title: "Customer deleted", description: "The customer has been successfully deleted." });
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Σφάλμα", description: "Αποτυχία διαγραφής πελάτη.", variant: "destructive" });
+    }
+  };  
 
   const handleDeleteTransaction = (transactionId: string) => {
     if (confirm("Are you sure you want to delete this transaction?")) {
@@ -257,65 +318,36 @@ export default function CustomersPage() {
   };
   
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+  
     if (!currentCustomer.name) {
       toast({
         title: "Error",
         description: "Name is a required field.",
         variant: "destructive",
-      })
-      return
-    }
-
-    if (!isEditing) {
-      logActivity({
-        type: "customer",
-        action: t.newCustomerAdded,
-        name: currentCustomer.name,
-        time: "Just now",
-        iconKey: "users", 
-        iconColor: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
-        avatar: "/placeholder.svg",
-      });      
-    } else {
-      logActivity({
-        type: "customer",
-        action: t.customerUpdated,
-        name: currentCustomer.name,
-        time: "Just now",
-        iconKey: "users",
-        iconColor: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-        avatar: "/placeholder.svg",
       });
+      return;
     }
-    
-
-    let updatedCustomers: Customer[]
-
-    if (isEditing) {
-      updatedCustomers = customers.map((customer) => (customer.id === currentCustomer.id ? currentCustomer : customer))
-      toast({
-        title: "Customer updated",
-        description: "The customer has been successfully updated.",
-      })
-    } else {
-      const newCustomer = {
-        ...currentCustomer,
-        id: generateId(),
+  
+    try {
+      if (isEditing) {
+        await updateCustomerApi(currentCustomer.id, currentCustomer);
+        toast({ title: "Customer updated", description: "The customer has been successfully updated." });
+      } else {
+        await createCustomerApi(currentCustomer);
+        toast({ title: "Customer added", description: "The customer has been successfully added." });
       }
-      updatedCustomers = [...customers, newCustomer]
-      toast({
-        title: "Customer added",
-        description: "The customer has been successfully added.",
-      })
+  
+      const fresh = await fetchCustomersApi();
+      setCustomers(fresh);
+      setIsDialogOpen(false);
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Σφάλμα", description: "Αποτυχία αποθήκευσης πελάτη.", variant: "destructive" });
     }
-
-    setCustomers(updatedCustomers)
-    setLocalData("customers", updatedCustomers)
-    setIsDialogOpen(false)
-  }
+  };
+  
 
   const handleAddTransaction = () => {
     if (!selectedCustomer) return;

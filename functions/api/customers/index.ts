@@ -36,29 +36,40 @@ export async function onRequest({ request, env }: any) {
   
     if (method === "POST") {
       const b = await safeJson(request);
-  
-      const name           = String(b?.name ?? "").trim();
-      const contact_person = (b?.contact_person ?? b?.contactPerson ?? "").toString().trim() || null;
-      const email          = (b?.email ?? "").toString().trim() || null;
-      const phone          = (b?.phone ?? "").toString().trim() || null;
-      const address        = (b?.address ?? "").toString().trim() || null;
-      const afm            = (b?.afm ?? "").toString().trim() || null;
-      const tractor        = (b?.tractor ?? "").toString().trim() || null;
-      const notes          = (b?.notes ?? "").toString().trim().slice(0, 2000) || null;
-  
+      const name = String(b?.name ?? "").trim();
       if (!name) return json({ error: "name is required" }, 400, cors());
-  
+    
+      const contact_person = String(b?.contact_person ?? "").trim();
+      const email          = String(b?.email ?? "").trim();
+      const phone          = String(b?.phone ?? "").trim();
+      const address        = String(b?.address ?? "").trim();
+      const afm            = String(b?.afm ?? "").trim();
+      const tractor        = String(b?.tractor ?? "").trim();
+      const notes          = String(b?.notes ?? "").trim().slice(0, 2000);
+    
       const id = crypto.randomUUID().replace(/-/g, "");
-      await env.DB.prepare(
-        `INSERT INTO customers
+    
+      // Detect if this DB has owner_id (prod does, local doesn't)
+      const hasOwnerId = await env.DB
+        .prepare("SELECT 1 AS ok FROM pragma_table_info('customers') WHERE name='owner_id' LIMIT 1;")
+        .first();
+    
+      if (hasOwnerId?.ok) {
+        await env.DB.prepare(
+          `INSERT INTO customers
+           (id, user_id, owner_id, name, contact_person, email, phone, address, afm, tractor, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(id, user.user_id, user.user_id, name, contact_person, email, phone, address, afm, tractor, notes).run();
+      } else {
+        await env.DB.prepare(
+          `INSERT INTO customers
            (id, user_id, name, contact_person, email, phone, address, afm, tractor, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(id, user.user_id, name, contact_person, email, phone, address, afm, tractor, notes).run();
-  
-      return json({
-        customer: { id, name, contact_person, email, phone, address, afm, tractor, notes }
-      }, 201, cors());
-    }
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(id, user.user_id, name, contact_person, email, phone, address, afm, tractor, notes).run();
+      }
+    
+      return json({ customer: { id, name, contact_person, email, phone, address, afm, tractor, notes } }, 201, cors());
+    }    
   
     return json({ error: "Method not allowed" }, 405, cors());
   }

@@ -7,8 +7,7 @@ import { motion } from 'framer-motion';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
-  const { user, initialized } = useAuth();
+  const { login, user, initialized } = useAuth();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');

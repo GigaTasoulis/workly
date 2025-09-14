@@ -54,6 +54,11 @@ export default function Home() {
     employees: 0,
   })
 
+  const fmtMonth = (d = new Date()) =>
+    d.toISOString().slice(0, 7); // "YYYY-MM"
+
+  const [selectedMonth, setSelectedMonth] = useState<string>(fmtMonth());
+
   // Metrics
   const [metrics, setMetrics] = useState<Metrics>({
     currency: "EUR",
@@ -204,6 +209,52 @@ export default function Home() {
   }, [])
 
   useEffect(() => setMounted(true), [])
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const qs = selectedMonth ? `?month=${encodeURIComponent(selectedMonth)}` : "";
+        const res = await fetch(`/api/dashboard/summary${qs}`, {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+        const json = await res.json();
+        if (cancelled) return;
+
+        const n = (x: any) => Number(x ?? 0) || 0;
+        const c = json?.counts ?? {};
+        const m = json?.metrics ?? {};
+
+        setCounts({
+          suppliers: n(c.suppliers),
+          workplaces: n(c.workplaces),
+          customers: n(c.customers),
+          employees: n(c.employees),
+        });
+
+        setMetrics({
+          currency: String(m.currency || "EUR"),
+          revenue: n(m.revenue),
+          expenses: n(m.expenses),
+          expensesBreakdown: {
+            suppliers: n(m.expensesBreakdown?.suppliers),
+            payroll: n(m.expensesBreakdown?.payroll),
+          },
+          netBalance: n(m.netBalance),
+          activeTransactionsCount: n(m.activeTransactionsCount),
+          topDebts: Array.isArray(m.topDebts)
+            ? m.topDebts.map((d: any) => ({
+                id: String(d.id),
+                name: String(d.name),
+                debt: n(d.debt),
+              }))
+            : [],
+        });
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [selectedMonth]);
   if (!mounted) return null
 
   
@@ -211,12 +262,29 @@ export default function Home() {
   return (
     <RequireAuth>
       <div className="space-y-6">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{t.dashboard}</h1>
           <p className="text-muted-foreground">
             {t.welcome}, {t.businessManagementSolution}.
           </p>
         </div>
+
+        {/* Month picker */}
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-muted-foreground">{t?.selectMonth ?? "Μήνας:"}</label>
+          <input
+            type="month"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="rounded-md border px-3 py-2 text-sm bg-white dark:bg-gray-900"
+          />
+          <button
+            className="text-sm underline"
+            onClick={() => setSelectedMonth("")}
+          >All time</button>
+        </div>
+      </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {stats.map((stat) => (

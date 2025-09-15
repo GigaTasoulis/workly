@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { DataTable } from "@/components/data-table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -8,14 +8,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
-import { TransactionList } from "@/components/TransactionList"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ShoppingBag, Mail, Phone, MapPin, FileText } from "lucide-react"
 import { translations as t } from "@/lib/translations"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-
+import SupplierPaymentHistory from "@/components/suppliers/SupplierPaymentHistory"
 
 const STATUS_API = ["pending", "paid", "cancelled"] as const;
 type StatusApi = typeof STATUS_API[number];
@@ -108,6 +107,8 @@ export default function SuppliersPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
   const { toast } = useToast()
+  const txAbortRef = useRef<AbortController | null>(null);
+
 
   // Transaction-related state for suppliers
   const [supplierTransactions, setSupplierTransactions] = useState<SupplierTransaction[]>([])
@@ -115,27 +116,112 @@ export default function SuppliersPage() {
   const [currentSupplierTransaction, setCurrentSupplierTransaction] = useState<SupplierTransaction>(initialSupplierTransaction)
   const [isSupplierTransactionEditing, setIsSupplierTransactionEditing] = useState(false)
   const [isSupplierPaymentDialogOpen, setIsSupplierPaymentDialogOpen] = useState(false)
-  const [supplierPaymentAmount, setSupplierPaymentAmount] = useState<number>(0)
+  const [supplierPaymentAmount, setSupplierPaymentAmount] = useState<string>("")
   const [supplierTransactionFilter, setSupplierTransactionFilter] = useState<"all" | "paid" | "pending">("all");
+  const [historyRefresh, setHistoryRefresh] = useState(0);
   const [initialDebt, setInitialDebt] = useState<number>(0);
+
+  // ------------- Supplier Transaction Logic --------------
+
+  const getSupplierTransactions = () => {
+    let filtered = supplierTransactions;
+    if (supplierTransactionFilter !== "all") {
+      filtered = filtered.filter((t) => mapStatusToApi(t.status) === supplierTransactionFilter);
+    }
+    return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  };
+  
+
+  // Helper: Compute total paid (or "spent") for a supplier (if needed)
+  const getTotalPaid = () =>
+    supplierTransactions.reduce((sum, t) => sum + (Number(t.amountPaid) || 0), 0);
+
+  // Helper: Compute outstanding balance ("Χρέη") from pending transactions
+  const getDebt = (supplierId?: string) => {
+    let list = supplierTransactions;
+    if (supplierId) {
+      list = list.filter(t => t.supplierId === supplierId);
+    }
+    return list
+      .filter(t => mapStatusToApi(t.status) === "pending")
+      .reduce((sum, t) => sum + (t.amount - (t.amountPaid || 0)), 0);
+  };
+
+
+  
+  const pendingTxsForSelected = useMemo(
+    () =>
+      selectedSupplier
+        ? supplierTransactions.filter(
+            (t) => t.supplierId === selectedSupplier.id && mapStatusToApi(t.status) === "pending"
+          )
+        : [],
+    [selectedSupplier?.id, supplierTransactions]
+  );
+  const pendingForDialog = pendingTxsForSelected;
+  const eur = useMemo(
+    () => new Intl.NumberFormat("el-GR", { style: "currency", currency: "EUR" }),
+    []
+  );
+  const selectedDebt = useMemo(
+    () => (selectedSupplier ? getDebt(selectedSupplier.id) : 0),
+    [selectedSupplier?.id, supplierTransactions]
+  );
+  const pendingCount = pendingTxsForSelected.length;
+  
+
+  function exportSelectedTransactionsCSV() {
+    if (!selectedSupplier) return;
+  
+    const rows = supplierTransactions.filter(t => t.supplierId === selectedSupplier.id);
+    const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+  
+    const header = ["Date", "Product", "Amount", "Paid", "Status", "Notes"]
+      .map(esc)
+      .join(",");
+  
+    const body = rows
+      .map(r =>
+        [r.date, r.productName, r.amount, r.amountPaid, r.status, r.notes]
+          .map(esc)
+          .join(",")
+      )
+      .join("\n");
+  
+    const csv = `${header}\n${body}`;
+  
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `supplier-${selectedSupplier.name}-transactions.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  
+  
+
 
   async function fetchSupplierTransactions(supplierId: string) {
     if (!supplierId) return;
+    txAbortRef.current?.abort();
+    const ac = new AbortController();
+    txAbortRef.current = ac;
+  
     const url = `/api/supplier-transactions?supplierId=${encodeURIComponent(supplierId)}`;
-    const res = await fetch(url, { credentials: "include" });
+    const res = await fetch(url, { credentials: "include", signal: ac.signal });
     if (!res.ok) {
+      if (ac.signal.aborted) return; 
       console.error("Failed to fetch supplier transactions", await res.text());
       return;
     }
     const data = await res.json();
-    // Map snake_case (API) -> camelCase (UI component expects)
     const mapped = (data.transactions || []).map((t: any) => ({
       id: t.id,
       supplierId: t.supplier_id,
       productName: t.product_name,
       amount: Number(t.amount) || 0,
       amountPaid: Number(t.amount_paid) || 0,
-      date: t.date, // already YYYY-MM-DD
+      date: t.date,
       status: mapStatusToUi(t.status as StatusApi),
       notes: t.notes || "",
     }));
@@ -272,23 +358,40 @@ const handleSubmit = async (e: React.FormEvent) => {
           amount: Number(initialDebt),
           amount_paid: 0,
           date: new Date().toISOString().slice(0, 10),
-          status: "pending",           // server will accept API code
+          status: "pending",
           notes: "Αρχικό υπόλοιπο",
         };
-    
+      
         const txRes = await fetch(`/api/supplier-transactions`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           credentials: "include",
           body: JSON.stringify(txPayload),
         });
-        if (!txRes.ok) {
+      
+        if (txRes.ok) {
+          const txJson = await txRes.json();
+          const txId = txJson?.transaction?.id;
+          if (txId) {
+            // also log to payments history as a "debt"
+            await fetch(`/api/supplier-payments`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                supplier_id: createdId,
+                transaction_id: txId,
+                amount: Number(initialDebt),
+                date: txPayload.date,
+                notes: `Δημιουργία οφειλής "${txPayload.product_name}"`,
+                type: "debt",
+              }),
+            });
+          }
+        } else {
           console.error("Failed to create opening balance:", await txRes.text());
-          // not fatal—still proceed
         }
-      }
-    
-      toast({ title: "Προστέθηκε", description: "Ο προμηθευτής προστέθηκε." });
+      }      
     }
 
     setIsDialogOpen(false);
@@ -316,33 +419,6 @@ const handleSubmit = async (e: React.FormEvent) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSupplier?.id]);
   
-
-
-  // ------------- Supplier Transaction Logic --------------
-
-  const getSupplierTransactions = () => {
-    let filtered = supplierTransactions;
-    if (supplierTransactionFilter !== "all") {
-      filtered = filtered.filter((t) => mapStatusToApi(t.status) === supplierTransactionFilter);
-    }
-    return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  };
-  
-
-  // Helper: Compute total paid (or "spent") for a supplier (if needed)
-  const getTotalPaid = () =>
-    supplierTransactions.reduce((sum, t) => sum + (Number(t.amountPaid) || 0), 0);
-
-  // Helper: Compute outstanding balance ("Χρέη") from pending transactions
-  const getDebt = (supplierId?: string) => {
-    let list = supplierTransactions;
-    if (supplierId) {
-      list = list.filter(t => t.supplierId === supplierId);
-    }
-    return list
-      .filter(t => mapStatusToApi(t.status) === "pending")
-      .reduce((sum, t) => sum + (t.amount - (t.amountPaid || 0)), 0);
-  };
   
 
   // We'll augment supplier data with debt for display in DataTable if needed
@@ -365,6 +441,28 @@ const handleSubmit = async (e: React.FormEvent) => {
     setIsSupplierTransactionEditing(true)
     setIsSupplierTransactionDialogOpen(true)
   }
+
+  function handleOpenPaymentForSelected() {
+    if (!selectedSupplier) return;
+  
+    // Pick the most recent pending debt for the supplier (or block if none)
+    const pending = pendingTxsForSelected
+      .slice()
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  
+    if (pending.length === 0) {
+      toast({
+        title: "Δεν υπάρχουν εκκρεμείς οφειλές",
+        description: "Ο προμηθευτής δεν έχει ανοιχτές οφειλές.",
+      });
+      return;
+    }
+  
+    setCurrentSupplierTransaction(pending[0]);
+    setSupplierPaymentAmount("");
+    setIsSupplierPaymentDialogOpen(true);
+  }
+  
 
   // Submission handler for supplier transactions
   const handleSupplierTransactionSubmit = async (e: React.FormEvent) => {
@@ -412,7 +510,32 @@ const handleSubmit = async (e: React.FormEvent) => {
           body: JSON.stringify(payload),
         });
         if (!res.ok) throw new Error(await res.text());
+        const created = await res.json();
+        const txId = created?.transaction?.id;
+        
+        // Record "new debt" in payments history so it appears in the list
+        if (txId) {
+          try {
+            await fetch(`/api/supplier-payments`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                supplier_id: selectedSupplier.id,
+                transaction_id: txId,
+                amount: Number(payload.amount),        
+                date: payload.date,
+                notes: `Δημιουργία οφειλής "${payload.product_name}"`,
+                type: "debt",                        
+              }),
+            });
+          } catch (e) {
+            console.warn("Debt history log failed:", e);
+          }
+        }
         toast({ title: "Η συναλλαγή προστέθηκε", description: "Η συναλλαγή καταχωρήθηκε επιτυχώς." });
+        setHistoryRefresh((k) => k + 1);        
+
       }
   
       setIsSupplierTransactionDialogOpen(false);
@@ -424,49 +547,59 @@ const handleSubmit = async (e: React.FormEvent) => {
       toast({ title: "Σφάλμα", description: "Αποτυχία αποθήκευσης συναλλαγής.", variant: "destructive" });
     }
   };
-  
 
-  // Payment handling for a supplier transaction
-  const handleOpenSupplierPaymentDialog = (transaction: SupplierTransaction) => {
-    setCurrentSupplierTransaction(transaction)
-    setSupplierPaymentAmount(0)
-    setIsSupplierPaymentDialogOpen(true)
-  }
+  const currentDebt = useMemo(
+    () => suppliers.find(s => s.id === currentSupplier.id)?.debt ?? 0,
+    [suppliers, currentSupplier.id]
+  );
+  
+  
 
   const handleSupplierPaymentSubmit = async () => {
     const tx = currentSupplierTransaction;
     if (!selectedSupplier?.id) return;
   
     const remaining = Number(tx.amount) - Number(tx.amountPaid);
-    if (supplierPaymentAmount <= 0) {
+    const amountNum = parseFloat(
+      supplierPaymentAmount.replace(",", ".")
+    );
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
       toast({ title: "Σφάλμα", description: "Το ποσό πληρωμής πρέπει να είναι μεγαλύτερο από το μηδέν.", variant: "destructive" });
       return;
     }
-    if (supplierPaymentAmount > remaining) {
+    if (amountNum > remaining) {
       toast({ title: "Σφάλμα", description: "Το ποσό πληρωμής δεν μπορεί να υπερβαίνει το υπόλοιπο.", variant: "destructive" });
       return;
     }
   
-    const newPaid = Number(tx.amountPaid) + Number(supplierPaymentAmount);
-  
     try {
-      const res = await fetch(`/api/supplier-transactions/${tx.id}`, {
-        method: "PUT",
+      const res = await fetch(`/api/supplier-payments`, {
+        method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ amount_paid: newPaid }),
+        body: JSON.stringify({
+          supplier_id: selectedSupplier.id,
+          transaction_id: tx.id,
+          amount: amountNum,
+          date: new Date().toISOString().slice(0, 10),
+          notes: `Πληρωμή για "${tx.productName}"`,
+          type: "payment",
+        }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "Payment failed");
   
       toast({ title: "Επιτυχής Πληρωμή", description: "Η πληρωμή καταχωρήθηκε." });
       setIsSupplierPaymentDialogOpen(false);
-      setSupplierPaymentAmount(0);
+      setSupplierPaymentAmount("");
   
-      await fetchSupplierTransactions(selectedSupplier.id);
-      await fetchSuppliers(); // debt might drop or hit zero
+      await fetchSupplierTransactions(selectedSupplier.id); // will reflect new amount_paid
+      await fetchSuppliers(); // supplier debt may change
+      setHistoryRefresh((k) => k + 1);                      // refresh history list
+  
     } catch (err: any) {
       console.error(err);
-      toast({ title: "Σφάλμα", description: "Αποτυχία πληρωμής.", variant: "destructive" });
+      toast({ title: "Σφάλμα", description: err?.message || "Αποτυχία πληρωμής.", variant: "destructive" });
     }
   };
   
@@ -490,56 +623,12 @@ const handleSubmit = async (e: React.FormEvent) => {
       toast({ title: "Σφάλμα", description: "Αποτυχία διαγραφής.", variant: "destructive" });
     }
   };
-  
-
-  // ------------- UI Rendering --------------
-
-  // Render the supplier transactions tab inside the supplier details card
-  const renderSupplierTransactionsTab = () => (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-sm font-medium">Ιστορικό Συναλλαγών</h3>
-          <p className="text-sm text-muted-foreground">
-            {t.totalSpent}: ${getTotalPaid().toLocaleString()}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-4">
-          <Select
-            value={supplierTransactionFilter}
-            onValueChange={(value) =>
-              setSupplierTransactionFilter(value as "all" | "paid" | "pending")
-            }
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Φίλτρο" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Όλα</SelectItem>
-              <SelectItem value="paid">Εξοφλημένα</SelectItem>
-              <SelectItem value="pending">Εκκρεμή</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button onClick={handleAddSupplierTransaction} size="sm">
-            {t.addTransaction}
-          </Button>
-        </div>
-      </div>
-      <TransactionList
-        transactions={getSupplierTransactions()}
-        onEdit={(t) => handleEditSupplierTransaction(t as unknown as SupplierTransaction)}
-        onDelete={handleDeleteSupplierTransaction}
-        onPayment={(t) => handleOpenSupplierPaymentDialog(t as unknown as SupplierTransaction)}
-        getStatusColor={statusBadgeClass}
-      />
-    </div>
-  );  
 
   // Render supplier details with a tab for transactions
   const renderSupplierCard = (supplier: Supplier) => (
     <Card>
       <CardHeader className="pb-3">
-        <div className="flex justify-between items-start">
+        <div className="flex items-start justify-between">
           <div>
             <CardTitle>{selectedSupplier?.name}</CardTitle>
             <CardDescription>Στοιχεία Προμηθευτή</CardDescription>
@@ -551,12 +640,11 @@ const handleSubmit = async (e: React.FormEvent) => {
         </div>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="details">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="details">Λεπτομέρειες</TabsTrigger>
-            <TabsTrigger value="transactions">Συναλλαγές</TabsTrigger>
+        <Tabs defaultValue="details" className="w-full">
+          <TabsList className="w-full">
+            <TabsTrigger value="details" className="flex-1 justify-center">Λεπτομέρειες</TabsTrigger>
           </TabsList>
-          <TabsContent value="details">
+          <TabsContent value="details" className="space-y-4 pt-4">
             <div className="space-y-2">
               <h3 className="text-sm font-medium">Πληροφορίες Επικοινωνίας</h3>
               <div className="grid gap-2">
@@ -609,9 +697,6 @@ const handleSubmit = async (e: React.FormEvent) => {
               </div>
             </div>
           </TabsContent>
-          <TabsContent value="transactions">
-            {renderSupplierTransactionsTab()}
-          </TabsContent>
         </Tabs>
       </CardContent>
     </Card>
@@ -653,6 +738,44 @@ const handleSubmit = async (e: React.FormEvent) => {
           )}
         </div>
       </div>
+
+      {/* Actions between suppliers table and transactions history */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="text-sm text-muted-foreground">
+          {selectedSupplier
+            ? <>Ενέργειες για: <span className="font-medium text-foreground">{selectedSupplier.name}</span></>
+            : "Επιλέξτε προμηθευτή για ενέργειες"}
+        </div>
+        {selectedSupplier && (
+          <div className="text-sm text-muted-foreground">
+            Εκκρεμείς συναλλαγές: <span className="font-medium">{pendingCount}</span> •
+            Υπόλοιπο: <span className="font-medium text-foreground">{eur.format(selectedDebt)}</span>
+          </div>
+        )}
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={handleAddSupplierTransaction}
+            disabled={!selectedSupplier}
+            className="w-full sm:w-auto"
+          >
+            Προσθήκη Οφειλής
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleOpenPaymentForSelected}
+            disabled={!selectedSupplier || pendingTxsForSelected.length === 0}
+            className="w-full sm:w-auto"
+          >
+            Πληρωμή
+          </Button>
+          <Button size="sm" variant="outline" onClick={exportSelectedTransactionsCSV} disabled={!selectedSupplier}>
+            Εξαγωγή CSV
+          </Button>
+        </div>
+      </div>
+
 
       {/* Supplier Dialog for adding/editing supplier */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -733,10 +856,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               {/* Read-only computed debt, correlating with supplier transactions */}
               <div className="space-y-2">
                 <Label>Οφειλές</Label>
-                <Input
-                  value={currentSupplier.id ? getDebt().toFixed(2) : "0.00"}
-                  readOnly
-                />
+                <Input value={currentSupplier.id ? currentDebt.toFixed(2) : "0.00"} readOnly />
               </div>
             </div>
             <DialogFooter>
@@ -757,6 +877,35 @@ const handleSubmit = async (e: React.FormEvent) => {
           </DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); handleSupplierPaymentSubmit(); }}>
             <div className="grid gap-4 py-4">
+              {pendingTxsForSelected.length > 1 && (
+                <div className="space-y-2">
+                  <Label htmlFor="chooseTx">Επιλέξτε Οφειλή</Label>
+                  <Select
+                    value={currentSupplierTransaction?.id || ""}
+                    onValueChange={(id) => {
+                      const tx = pendingTxsForSelected.find((x) => x.id === id);
+                      if (tx) {
+                        setCurrentSupplierTransaction(tx);
+                        setSupplierPaymentAmount("");
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="chooseTx">
+                      <SelectValue placeholder="Επιλέξτε οφειλή" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {pendingTxsForSelected.map((tx) => {
+                        const remaining = (Number(tx.amount) || 0) - (Number(tx.amountPaid) || 0);
+                        return (
+                          <SelectItem key={tx.id} value={tx.id}>
+                            {tx.productName} — Υπόλοιπο €{remaining.toLocaleString()}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div>
                 <p>
                   <strong>Προϊόν:</strong> {currentSupplierTransaction.productName}
@@ -780,7 +929,11 @@ const handleSubmit = async (e: React.FormEvent) => {
                   max={currentSupplierTransaction.amount - currentSupplierTransaction.amountPaid}
                   step="0.01"
                   value={supplierPaymentAmount}
-                  onChange={(e) => setSupplierPaymentAmount(Number.parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setSupplierPaymentAmount(e.target.value)}
+                  placeholder={`Μέχρι €${(
+                    (Number(currentSupplierTransaction.amount) || 0) -
+                    (Number(currentSupplierTransaction.amountPaid) || 0)
+                  ).toLocaleString()}`}
                   required
                 />
               </div>
@@ -902,6 +1055,9 @@ const handleSubmit = async (e: React.FormEvent) => {
           </form>
         </DialogContent>
       </Dialog>
+
+      <SupplierPaymentHistory supplierId={selectedSupplier?.id || undefined} refreshKey={historyRefresh} pageSize={10} />
+
     </div>
   )
 }

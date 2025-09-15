@@ -45,6 +45,82 @@ function apiRowToCustomer(r: any): Customer {
   };
 }
 
+function uiTxToApi(t: Transaction) {
+  return {
+    customer_id: t.customerId,
+    product_name: t.productName,
+    amount: t.amount,
+    amount_paid: t.amountPaid,
+    status: t.status,
+    date: t.date,
+    notes: t.notes,
+  };
+}
+
+async function createCustomerTransactionApi(tx: {
+  customerId: string;
+  productName: string;
+  amount: number;
+  amountPaid: number;
+  date: string;
+  status: "paid" | "pending" | "cancelled";
+  notes: string;
+}): Promise<string> {
+  const r = await fetch(`/api/customer-transactions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      customer_id: tx.customerId,
+      product_name: tx.productName,
+      amount: tx.amount,
+      amount_paid: tx.amountPaid,
+      date: tx.date,
+      status: tx.status,
+      notes: tx.notes,
+    }),
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j?.error || "Failed to create transaction");
+  return String(j.transaction.id);
+}
+
+
+async function updateCustomerTransactionApi(id: string, input: Transaction): Promise<void> {
+  const r = await fetch(`/api/customer-transactions/${id}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(uiTxToApi(input)),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+
+async function payTransactionApi(input: {
+  transactionId: string;
+  amount: number;
+  date?: string;
+  notes?: string;
+}) {
+  const r = await fetch(`/api/customer-payments`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      transaction_id: input.transactionId,
+      amount: input.amount,
+      date: input.date,
+      notes: input.notes,
+    }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+
+
+
 async function fetchCustomersApi(): Promise<Customer[]> {
   const r = await fetch(`/api/customers`, { credentials: "include" });
   if (!r.ok) throw new Error(await r.text());
@@ -158,9 +234,28 @@ export default function CustomersPage() {
   const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [paymentCustomerSearch, setPaymentCustomerSearch] = useState<string>("");
   const paymentsPerPage = 10;
+  const [paying, setPaying] = useState(false);
+
+  const ensureServerTxId = async (tx: Transaction) => {
+    // If it already looks like a UUID-ish 32-hex id, assume server-created.
+    if (/^[a-f0-9]{32}$/i.test(tx.id)) return tx.id;
   
-
-
+    // Create on server first
+    const newId = await createCustomerTransactionApi({
+      customerId: tx.customerId,
+      productName: tx.productName,
+      amount: tx.amount,
+      amountPaid: tx.amountPaid,
+      date: tx.date,
+      status: tx.status,
+      notes: tx.notes,
+    });
+  
+    // Swap ids in local state
+    setTransactions(prev => prev.map(t => (t.id === tx.id ? { ...t, id: newId } : t)));
+    setCurrentTransaction(prev => ({ ...prev, id: newId }));
+    return newId;
+  };
 
 
   useEffect(() => {
@@ -194,73 +289,60 @@ export default function CustomersPage() {
     setIsDialogOpen(true)
   }
 
-  const handlePaymentSubmit = () => {
-    const newPayment: Payment = {
-      id: generateId(),
-      transactionId: currentTransaction.id,
-      customerId: currentTransaction.customerId,
-      productName: currentTransaction.productName,
-      paymentAmount: paymentAmount, 
-      paymentDate: paymentDate,
-      notes: paymentNotes,
-    };
-    const updatedPayments = [...payments, newPayment];
-    setPayments(updatedPayments);
-    setLocalData("payments", updatedPayments);
-
+  const handlePaymentSubmit = async () => {
+    if (paying) return;
     const remaining = Number(currentTransaction.amount) - Number(currentTransaction.amountPaid);
-    
-    if (paymentAmount <= 0) {
-      toast({
-        title: "Error",
-        description: "Payment amount must be greater than zero.",
-        variant: "destructive",
-      });
+    if (paymentAmount <= 0 || paymentAmount > remaining) {
+      toast({ title: "Error", description: "Invalid payment amount.", variant: "destructive" });
       return;
     }
-    
-    if (paymentAmount > remaining) {
-      toast({
-        title: "Error",
-        description: "Payment amount cannot exceed the remaining balance.",
-        variant: "destructive",
+  
+    setPaying(true);
+    try {
+      const txId = await ensureServerTxId(currentTransaction);
+  
+      await payTransactionApi({
+        transactionId: txId,
+        amount: paymentAmount,
+        date: paymentDate,
+        notes: paymentNotes,
       });
-      return;
+  
+      // Optimistic local update using the exact id we paid
+      setTransactions(prev =>
+        prev.map(t =>
+          t.id === txId
+            ? {
+                ...t,
+                amountPaid: (Number(t.amountPaid) || 0) + paymentAmount,
+                status:
+                  (Number(t.amountPaid) || 0) + paymentAmount >= Number(t.amount) ? "paid" : t.status,
+              }
+            : t
+        )
+      );
+  
+      toast({ title: "Payment successful", description: "The payment has been recorded." });
+      setIsPaymentDialogOpen(false);
+      setPaymentAmount(0);
+      setPaymentDate(new Date().toISOString().split("T")[0]);
+      logActivity({
+        type: "transaction",
+        action: t.transactionPaid,
+        name: currentTransaction.productName,
+        time: "Just now",
+        iconKey: "euroSign",
+        iconColor: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+      });
+    } catch (e: any) {
+      console.error(e);
+      toast({ title: "Σφάλμα", description: e?.message || "Payment failed.", variant: "destructive" });
+    } finally {
+      setPaying(false);
     }
-    
-    // Update the transaction's amountPaid:
-    const updatedTransaction = { ...currentTransaction };
-    updatedTransaction.amountPaid += paymentAmount;
-    if (updatedTransaction.amountPaid >= updatedTransaction.amount) {
-      updatedTransaction.status = "paid";
-    }
-    
-    const updatedTransactions = transactions.map((t) =>
-      t.id === updatedTransaction.id ? updatedTransaction : t
-    );
-    setTransactions(updatedTransactions);
-    setLocalData("transactions", updatedTransactions);
-
-    toast({
-      title: "Payment successful",
-      description: "The payment has been recorded.",
-    });
-    
-    // Close the Payment Dialog and reset paymentAmount:
-    setIsPaymentDialogOpen(false);
-    setPaymentAmount(0);
-    setPaymentDate(new Date().toISOString().split("T")[0]);
-    logActivity({
-      type: "transaction",
-      action: t.transactionPaid, 
-      name: currentTransaction.productName,
-      time: "Just now",
-      iconKey: "euroSign", 
-      iconColor: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
-    });    
-    
-    
   };
+  
+  
   
 
   const handleEdit = (customer: Customer) => {
@@ -305,13 +387,13 @@ export default function CustomersPage() {
     debt: getDebt(customer.id),
   }));
 
-  const handleEditTransaction = (transaction: Transaction) => {
+  const handleEditTransaction = (transaction: any) => {
     setCurrentTransaction(transaction);
     setIsTransactionEditing(true);
     setIsTransactionDialogOpen(true);
   };
 
-  const handleOpenPaymentDialog = (transaction: Transaction) => {
+  const handleOpenPaymentDialog = (transaction: any) => {
     setCurrentTransaction(transaction);
     setPaymentAmount(0); // Reset previous payment value
     setIsPaymentDialogOpen(true);
@@ -359,49 +441,47 @@ export default function CustomersPage() {
     setIsTransactionDialogOpen(true);
   }  
 
-  const handleTransactionSubmit = (e: React.FormEvent) => {
+  const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
   
     if (!currentTransaction.productName || !currentTransaction.amount) {
-      toast({
-        title: "Σφάλμα",
-        description: "Το όνομα του προϊόντος και το ποσό είναι υποχρεωτικά πεδία.",
-        variant: "destructive",
-      });
+      toast({ title: "Σφάλμα", description: "Το όνομα του προϊόντος και το ποσό είναι υποχρεωτικά.", variant: "destructive" });
       return;
     }
   
-    // Prepare the transaction object and update status if fully paid
-    const transactionToSave = { ...currentTransaction };
-    if (transactionToSave.amountPaid >= transactionToSave.amount) {
-      transactionToSave.status = "paid";
-    }
+    const tx = { ...currentTransaction };
+    if (tx.amountPaid >= tx.amount) tx.status = "paid";
   
-    if (isTransactionEditing) {
-      // Update the existing transaction
-      const updatedTransactions = transactions.map((t) =>
-        t.id === transactionToSave.id ? transactionToSave : t
-      );
-      setTransactions(updatedTransactions);
-      setLocalData("transactions", updatedTransactions);
-      toast({
-        title: "Η συναλλαγή ενημερώθηκε",
-        description: "Η συναλλαγή ενημερώθηκε επιτυχώς.",
-      });
-      setIsTransactionEditing(false);
-    } else {
-      // Create a new transaction
-      transactionToSave.id = generateId();
-      const updatedTransactions = [...transactions, transactionToSave];
-      setTransactions(updatedTransactions);
-      setLocalData("transactions", updatedTransactions);
-      toast({
-        title: "Η συναλλαγή προστέθηκε",
-        description: "Η συναλλαγή καταχωρήθηκε επιτυχώς.",
-      });
+    try {
+      if (isTransactionEditing) {
+        await updateCustomerTransactionApi(tx.id, tx);
+        setTransactions(prev => prev.map(t => (t.id === tx.id ? tx : t)));
+        toast({ title: "Η συναλλαγή ενημερώθηκε", description: "Η συναλλαγή ενημερώθηκε επιτυχώς." });
+        setIsTransactionEditing(false);
+      } else {
+        // Create on server once, then store the returned id
+        const newId = await createCustomerTransactionApi({
+          customerId: tx.customerId,
+          productName: tx.productName,
+          amount: tx.amount,
+          amountPaid: tx.amountPaid,
+          date: tx.date,
+          status: tx.status,
+          notes: tx.notes,
+        });
+        const saved = { ...tx, id: newId };
+        setTransactions(prev => [...prev, saved]);
+        setLocalData("transactions", [...transactions, saved]);
+        toast({ title: "Η συναλλαγή προστέθηκε", description: "Η συναλλαγή καταχωρήθηκε επιτυχώς." });
+      }
+      setIsTransactionDialogOpen(false);
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Σφάλμα", description: "Αποτυχία αποθήκευσης συναλλαγής.", variant: "destructive" });
     }
-    setIsTransactionDialogOpen(false);
   };
+  
+  
    
 
   const getCustomerTransactions = (customerId: string) => {
@@ -723,9 +803,9 @@ export default function CustomersPage() {
             <DialogTitle>Πληρωμή</DialogTitle>
           </DialogHeader>
           <form
-            onSubmit={(e) => {
+            onSubmit={ async (e) => {
               e.preventDefault();
-              handlePaymentSubmit();
+              await handlePaymentSubmit();
             }}
           >
             <div className="grid gap-4 py-4">
@@ -787,7 +867,9 @@ export default function CustomersPage() {
               <Button type="button" variant="outline" onClick={() => setIsPaymentDialogOpen(false)}>
                 Ακύρωση
               </Button>
-              <Button type="submit">Πληρωμή</Button>
+              <Button type="submit" disabled={paying}>
+                {paying ? "Πληρωμή…" : "Πληρωμή"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

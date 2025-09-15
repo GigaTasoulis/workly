@@ -29,10 +29,8 @@ import { TopDebts } from "@/components/dashboard/TopDebts"
 import { translations as t } from "@/lib/translations"
 import RequireAuth from "@/components/RequireAuth"
 
-// ---- small helper so all math is NaN-safe
 const n = (x: any) => Number(x ?? 0) || 0
 
-// Optional: type hints for clarity (kept minimal due to // @ts-nocheck)
 type Counts = { suppliers: number; workplaces: number; customers: number; employees: number }
 type DebtItem = { id: string; name: string; debt: number }
 type Metrics = {
@@ -159,55 +157,6 @@ export default function Home() {
 
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await fetch("/api/dashboard/summary", {
-          method: "GET",
-          credentials: "include",
-          cache: "no-store",
-        })
-        const json = await res.json()
-        if (cancelled) return
-
-        const c = json?.counts ?? {}
-        const m = json?.metrics ?? {}
-
-        setCounts({
-          suppliers: n(c.suppliers),
-          workplaces: n(c.workplaces),
-          customers: n(c.customers),
-          employees: n(c.employees),
-        })
-
-        setMetrics({
-          currency: String(m.currency || "EUR"),
-          revenue: n(m.revenue),
-          expenses: n(m.expenses),
-          expensesBreakdown: {
-            suppliers: n(m.expensesBreakdown?.suppliers),
-            payroll: n(m.expensesBreakdown?.payroll),
-          },
-          netBalance: n(m.netBalance),
-          activeTransactionsCount: n(m.activeTransactionsCount),
-          topDebts: Array.isArray(m.topDebts)
-            ? m.topDebts.map((d: any) => ({
-                id: String(d.id),
-                name: String(d.name),
-                debt: n(d.debt),
-              }))
-            : [],
-        })
-      } catch {
-        // leave defaults; UI stays usable
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   useEffect(() => setMounted(true), [])
   useEffect(() => {
     let cancelled = false;
@@ -222,7 +171,6 @@ export default function Home() {
         const json = await res.json();
         if (cancelled) return;
 
-        const n = (x: any) => Number(x ?? 0) || 0;
         const c = json?.counts ?? {};
         const m = json?.metrics ?? {};
 
@@ -248,6 +196,14 @@ export default function Home() {
                 id: String(d.id),
                 name: String(d.name),
                 debt: n(d.debt),
+              }))
+            : [],
+          topCustomers: Array.isArray(m.topCustomers)
+            ? m.topCustomers.map((c: any) => ({
+                id: String(c.id),
+                name: String(c.name),
+                email: String(c.email || ""),
+                revenue: n(c.revenue),
               }))
             : [],
         });
@@ -343,7 +299,7 @@ export default function Home() {
               <CardDescription>{t.highestValueCustomers}</CardDescription>
             </CardHeader>
             <CardContent>
-              <TopCustomers />
+              <TopCustomers items={metrics.topCustomers} />
             </CardContent>
           </Card>
           <Card className="md:col-span-4">

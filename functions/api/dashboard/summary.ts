@@ -128,6 +128,36 @@ export async function onRequest({ request, env }: any) {
       activeTransactionsCount += n(pSup?.c);
     }
 
+    // ---------- TOP CUSTOMERS by revenue (month-filtered if provided) ----------
+    let topCustomers: Array<{ id: string; name: string; email: string; revenue: number }> = [];
+    if (ctTable) {
+      const sql = `
+        SELECT c.id, c.name, c.email,
+              COALESCE(SUM(COALESCE(t.amount_paid,0)), 0) AS revenue
+          FROM customers c
+    LEFT JOIN ${ctTable} t
+            ON t.customer_id = c.id
+          AND t.user_id = c.user_id
+          ${hasMonth ? "AND t.date >= ? AND t.date < ?" : ""}
+        WHERE c.user_id = ?
+      GROUP BY c.id, c.name, c.email
+        HAVING revenue > 0
+      ORDER BY revenue DESC
+        LIMIT 4`;
+      const binds = hasMonth
+        ? [monthStart, nextMonthStart, user.user_id]
+        : [user.user_id];
+      const rows = await env.DB.prepare(sql).bind(...binds).all();
+
+      topCustomers = (rows?.results ?? []).map((r: any) => ({
+        id: String(r.id),
+        name: String(r.name),
+        email: String(r.email || ""),
+        revenue: Number(r.revenue) || 0,
+      }));
+    }
+
+
     if (ptTable) {
       const pPay = await safeFirst(
         `SELECT COUNT(*) AS c FROM ${ptTable}
@@ -173,6 +203,7 @@ export async function onRequest({ request, env }: any) {
         netBalance,
         activeTransactionsCount,
         topDebts,
+        topCustomers,
       },
     }, 200, cors());
   } catch (err: any) {
@@ -188,6 +219,7 @@ export async function onRequest({ request, env }: any) {
         netBalance: 0,
         activeTransactionsCount: 0,
         topDebts: [],
+        topCustomers: [],
       },
     }, 200, cors());
   }

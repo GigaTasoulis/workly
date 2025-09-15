@@ -582,10 +582,9 @@ export default function EmployeesPage() {
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="details">
-                  <TabsList className="grid w-full grid-cols-3">
+                  <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="details">{t.details}</TabsTrigger>
                     <TabsTrigger value="employment">{t.employmentDetails}</TabsTrigger>
-                    <TabsTrigger value="history">Ιστορικό</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="details" className="space-y-4 pt-4">

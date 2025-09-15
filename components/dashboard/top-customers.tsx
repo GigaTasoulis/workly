@@ -1,17 +1,20 @@
 "use client"
 
+import { useEffect, useState, useMemo } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Progress } from "@/components/ui/progress"
 import { getLocalData } from "@/lib/utils"
 
-interface Customer {
+type TopCustomerItem = {
   id: string;
   name: string;
-  email: string;
-  avatar: string;
+  email?: string;
+  revenue: number;
+  avatar?: string;
 }
 
-interface Transaction {
+type LocalCustomer = { id: string; name: string; email?: string; avatar?: string }
+type LocalTx = {
   id: string;
   customerId: string;
   productName: string;
@@ -22,43 +25,66 @@ interface Transaction {
   notes: string;
 }
 
-export function TopCustomers() {
-  // Load customers and transactions dynamically
-  const customers: Customer[] = getLocalData("customers") || []
-  const transactions: Transaction[] = getLocalData("transactions") || []
+export function TopCustomers({ items }: { items?: TopCustomerItem[] }) {
+  const [data, setData] = useState<TopCustomerItem[]>([])
 
-  // Compute revenue per customer (using amountPaid)
-  const customerRevenue = customers.map((customer) => {
-    const revenue = transactions
-      .filter((tr) => tr.customerId === customer.id)
-      .reduce((sum, tr) => sum + tr.amountPaid, 0)
-    return { ...customer, revenue }
-  })
+  useEffect(() => {
+    // 1) Use items from parent (API-driven)
+    if (Array.isArray(items) && items.length) {
+      setData(items)
+      return
+    }
 
-  // Sort customers descending by revenue and take top 4
-  const topCustomers = customerRevenue.sort((a, b) => b.revenue - a.revenue).slice(0, 4)
+    // 2) Fallback to local storage (legacy)
+    try {
+      const customers: LocalCustomer[] = getLocalData("customers") || []
+      const txs: LocalTx[] = getLocalData("transactions") || []
 
-  // Use the highest revenue value as a scaling factor for the progress bar
-  const maxValue = topCustomers.reduce((max, c) => (c.revenue > max ? c.revenue : max), 1)
+      const rows: TopCustomerItem[] = customers.map((c) => {
+        const revenue = txs
+          .filter((t) => t.customerId === c.id)
+          .reduce((sum, t) => sum + (Number(t.amountPaid) || 0), 0)
+        return { id: c.id, name: c.name, email: c.email || "", avatar: c.avatar, revenue }
+      })
+
+      rows.sort((a, b) => b.revenue - a.revenue)
+      setData(rows.slice(0, 4))
+    } catch {
+      setData([])
+    }
+  }, [items])
+
+  const maxValue = useMemo(
+    () => (data.reduce((m, c) => (c.revenue > m ? c.revenue : m), 0) || 1),
+    [data]
+  )
+
+  if (!data.length) {
+    return <p className="text-sm text-muted-foreground">Δεν υπάρχουν δεδομένα πελατών.</p>
+  }
 
   return (
     <div className="space-y-4">
-      {topCustomers.map((customer) => (
+      {data.map((customer) => (
         <div key={customer.id} className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={customer.avatar} alt={customer.name} />
-                <AvatarFallback>{customer.name.charAt(0)}</AvatarFallback>
+                {customer.avatar ? (
+                  <AvatarImage src={customer.avatar} alt={customer.name} />
+                ) : null}
+                <AvatarFallback>{customer.name?.charAt(0) ?? "?"}</AvatarFallback>
               </Avatar>
               <div>
                 <p className="text-sm font-medium">{customer.name}</p>
-                <p className="text-xs text-muted-foreground">{customer.email}</p>
+                {customer.email ? (
+                  <p className="text-xs text-muted-foreground">{customer.email}</p>
+                ) : null}
               </div>
             </div>
-            <p className="text-sm font-medium">€{customer.revenue.toLocaleString()}</p>
+            <p className="text-sm font-medium">€{(Number(customer.revenue) || 0).toLocaleString()}</p>
           </div>
-          <Progress value={(customer.revenue / maxValue) * 100} className="h-2" />
+          <Progress value={Math.max(0, Math.min(100, (Number(customer.revenue) / maxValue) * 100))} className="h-2" />
         </div>
       ))}
     </div>

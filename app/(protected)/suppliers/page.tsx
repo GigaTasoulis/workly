@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { DataTable } from "@/components/data-table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -107,6 +107,8 @@ export default function SuppliersPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
   const { toast } = useToast()
+  const txAbortRef = useRef<AbortController | null>(null);
+
 
   // Transaction-related state for suppliers
   const [supplierTransactions, setSupplierTransactions] = useState<SupplierTransaction[]>([])
@@ -114,10 +116,39 @@ export default function SuppliersPage() {
   const [currentSupplierTransaction, setCurrentSupplierTransaction] = useState<SupplierTransaction>(initialSupplierTransaction)
   const [isSupplierTransactionEditing, setIsSupplierTransactionEditing] = useState(false)
   const [isSupplierPaymentDialogOpen, setIsSupplierPaymentDialogOpen] = useState(false)
-  const [supplierPaymentAmount, setSupplierPaymentAmount] = useState<number>(0)
+  const [supplierPaymentAmount, setSupplierPaymentAmount] = useState<string>("")
   const [supplierTransactionFilter, setSupplierTransactionFilter] = useState<"all" | "paid" | "pending">("all");
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const [initialDebt, setInitialDebt] = useState<number>(0);
+
+  // ------------- Supplier Transaction Logic --------------
+
+  const getSupplierTransactions = () => {
+    let filtered = supplierTransactions;
+    if (supplierTransactionFilter !== "all") {
+      filtered = filtered.filter((t) => mapStatusToApi(t.status) === supplierTransactionFilter);
+    }
+    return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  };
+  
+
+  // Helper: Compute total paid (or "spent") for a supplier (if needed)
+  const getTotalPaid = () =>
+    supplierTransactions.reduce((sum, t) => sum + (Number(t.amountPaid) || 0), 0);
+
+  // Helper: Compute outstanding balance ("Χρέη") from pending transactions
+  const getDebt = (supplierId?: string) => {
+    let list = supplierTransactions;
+    if (supplierId) {
+      list = list.filter(t => t.supplierId === supplierId);
+    }
+    return list
+      .filter(t => mapStatusToApi(t.status) === "pending")
+      .reduce((sum, t) => sum + (t.amount - (t.amountPaid || 0)), 0);
+  };
+
+
+  
   const pendingTxsForSelected = useMemo(
     () =>
       selectedSupplier
@@ -128,25 +159,69 @@ export default function SuppliersPage() {
     [selectedSupplier?.id, supplierTransactions]
   );
   const pendingForDialog = pendingTxsForSelected;
+  const eur = useMemo(
+    () => new Intl.NumberFormat("el-GR", { style: "currency", currency: "EUR" }),
+    []
+  );
+  const selectedDebt = useMemo(
+    () => (selectedSupplier ? getDebt(selectedSupplier.id) : 0),
+    [selectedSupplier?.id, supplierTransactions]
+  );
+  const pendingCount = pendingTxsForSelected.length;
+  
+
+  function exportSelectedTransactionsCSV() {
+    if (!selectedSupplier) return;
+  
+    const rows = supplierTransactions.filter(t => t.supplierId === selectedSupplier.id);
+    const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+  
+    const header = ["Date", "Product", "Amount", "Paid", "Status", "Notes"]
+      .map(esc)
+      .join(",");
+  
+    const body = rows
+      .map(r =>
+        [r.date, r.productName, r.amount, r.amountPaid, r.status, r.notes]
+          .map(esc)
+          .join(",")
+      )
+      .join("\n");
+  
+    const csv = `${header}\n${body}`;
+  
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `supplier-${selectedSupplier.name}-transactions.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  
+  
 
 
   async function fetchSupplierTransactions(supplierId: string) {
     if (!supplierId) return;
+    txAbortRef.current?.abort();
+    const ac = new AbortController();
+    txAbortRef.current = ac;
+  
     const url = `/api/supplier-transactions?supplierId=${encodeURIComponent(supplierId)}`;
-    const res = await fetch(url, { credentials: "include" });
+    const res = await fetch(url, { credentials: "include", signal: ac.signal });
     if (!res.ok) {
+      if (ac.signal.aborted) return; 
       console.error("Failed to fetch supplier transactions", await res.text());
       return;
     }
     const data = await res.json();
-    // Map snake_case (API) -> camelCase (UI component expects)
     const mapped = (data.transactions || []).map((t: any) => ({
       id: t.id,
       supplierId: t.supplier_id,
       productName: t.product_name,
       amount: Number(t.amount) || 0,
       amountPaid: Number(t.amount_paid) || 0,
-      date: t.date, // already YYYY-MM-DD
+      date: t.date,
       status: mapStatusToUi(t.status as StatusApi),
       notes: t.notes || "",
     }));
@@ -344,33 +419,6 @@ const handleSubmit = async (e: React.FormEvent) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSupplier?.id]);
   
-
-
-  // ------------- Supplier Transaction Logic --------------
-
-  const getSupplierTransactions = () => {
-    let filtered = supplierTransactions;
-    if (supplierTransactionFilter !== "all") {
-      filtered = filtered.filter((t) => mapStatusToApi(t.status) === supplierTransactionFilter);
-    }
-    return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  };
-  
-
-  // Helper: Compute total paid (or "spent") for a supplier (if needed)
-  const getTotalPaid = () =>
-    supplierTransactions.reduce((sum, t) => sum + (Number(t.amountPaid) || 0), 0);
-
-  // Helper: Compute outstanding balance ("Χρέη") from pending transactions
-  const getDebt = (supplierId?: string) => {
-    let list = supplierTransactions;
-    if (supplierId) {
-      list = list.filter(t => t.supplierId === supplierId);
-    }
-    return list
-      .filter(t => mapStatusToApi(t.status) === "pending")
-      .reduce((sum, t) => sum + (t.amount - (t.amountPaid || 0)), 0);
-  };
   
 
   // We'll augment supplier data with debt for display in DataTable if needed
@@ -411,7 +459,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     }
   
     setCurrentSupplierTransaction(pending[0]);
-    setSupplierPaymentAmount(0);
+    setSupplierPaymentAmount("");
     setIsSupplierPaymentDialogOpen(true);
   }
   
@@ -499,25 +547,27 @@ const handleSubmit = async (e: React.FormEvent) => {
       toast({ title: "Σφάλμα", description: "Αποτυχία αποθήκευσης συναλλαγής.", variant: "destructive" });
     }
   };
-  
 
-  // Payment handling for a supplier transaction
-  const handleOpenSupplierPaymentDialog = (transaction: SupplierTransaction) => {
-    setCurrentSupplierTransaction(transaction)
-    setSupplierPaymentAmount(0)
-    setIsSupplierPaymentDialogOpen(true)
-  }
+  const currentDebt = useMemo(
+    () => suppliers.find(s => s.id === currentSupplier.id)?.debt ?? 0,
+    [suppliers, currentSupplier.id]
+  );
+  
+  
 
   const handleSupplierPaymentSubmit = async () => {
     const tx = currentSupplierTransaction;
     if (!selectedSupplier?.id) return;
   
     const remaining = Number(tx.amount) - Number(tx.amountPaid);
-    if (supplierPaymentAmount <= 0) {
+    const amountNum = parseFloat(
+      supplierPaymentAmount.replace(",", ".")
+    );
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
       toast({ title: "Σφάλμα", description: "Το ποσό πληρωμής πρέπει να είναι μεγαλύτερο από το μηδέν.", variant: "destructive" });
       return;
     }
-    if (supplierPaymentAmount > remaining) {
+    if (amountNum > remaining) {
       toast({ title: "Σφάλμα", description: "Το ποσό πληρωμής δεν μπορεί να υπερβαίνει το υπόλοιπο.", variant: "destructive" });
       return;
     }
@@ -530,7 +580,7 @@ const handleSubmit = async (e: React.FormEvent) => {
         body: JSON.stringify({
           supplier_id: selectedSupplier.id,
           transaction_id: tx.id,
-          amount: Number(supplierPaymentAmount),
+          amount: amountNum,
           date: new Date().toISOString().slice(0, 10),
           notes: `Πληρωμή για "${tx.productName}"`,
           type: "payment",
@@ -541,7 +591,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   
       toast({ title: "Επιτυχής Πληρωμή", description: "Η πληρωμή καταχωρήθηκε." });
       setIsSupplierPaymentDialogOpen(false);
-      setSupplierPaymentAmount(0);
+      setSupplierPaymentAmount("");
   
       await fetchSupplierTransactions(selectedSupplier.id); // will reflect new amount_paid
       await fetchSuppliers(); // supplier debt may change
@@ -696,6 +746,12 @@ const handleSubmit = async (e: React.FormEvent) => {
             ? <>Ενέργειες για: <span className="font-medium text-foreground">{selectedSupplier.name}</span></>
             : "Επιλέξτε προμηθευτή για ενέργειες"}
         </div>
+        {selectedSupplier && (
+          <div className="text-sm text-muted-foreground">
+            Εκκρεμείς συναλλαγές: <span className="font-medium">{pendingCount}</span> •
+            Υπόλοιπο: <span className="font-medium text-foreground">{eur.format(selectedDebt)}</span>
+          </div>
+        )}
         <div className="flex gap-2 w-full sm:w-auto">
           <Button
             size="sm"
@@ -713,6 +769,9 @@ const handleSubmit = async (e: React.FormEvent) => {
             className="w-full sm:w-auto"
           >
             Πληρωμή
+          </Button>
+          <Button size="sm" variant="outline" onClick={exportSelectedTransactionsCSV} disabled={!selectedSupplier}>
+            Εξαγωγή CSV
           </Button>
         </div>
       </div>
@@ -797,10 +856,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               {/* Read-only computed debt, correlating with supplier transactions */}
               <div className="space-y-2">
                 <Label>Οφειλές</Label>
-                <Input
-                  value={currentSupplier.id ? getDebt().toFixed(2) : "0.00"}
-                  readOnly
-                />
+                <Input value={currentSupplier.id ? currentDebt.toFixed(2) : "0.00"} readOnly />
               </div>
             </div>
             <DialogFooter>
@@ -830,7 +886,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                       const tx = pendingTxsForSelected.find((x) => x.id === id);
                       if (tx) {
                         setCurrentSupplierTransaction(tx);
-                        setSupplierPaymentAmount(0);
+                        setSupplierPaymentAmount("");
                       }
                     }}
                   >
@@ -873,7 +929,11 @@ const handleSubmit = async (e: React.FormEvent) => {
                   max={currentSupplierTransaction.amount - currentSupplierTransaction.amountPaid}
                   step="0.01"
                   value={supplierPaymentAmount}
-                  onChange={(e) => setSupplierPaymentAmount(Number.parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setSupplierPaymentAmount(e.target.value)}
+                  placeholder={`Μέχρι €${(
+                    (Number(currentSupplierTransaction.amount) || 0) -
+                    (Number(currentSupplierTransaction.amountPaid) || 0)
+                  ).toLocaleString()}`}
                   required
                 />
               </div>

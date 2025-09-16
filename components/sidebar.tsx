@@ -31,7 +31,7 @@ export function Sidebar({ isOpen, onOpenChange }: SidebarProps) {
     { name: t.employees, path: "/employees", icon: <Briefcase className="h-5 w-5" /> },
   ]
 
-  // Close the drawer when route changes (mobile)
+  // Close drawer on route change (mobile)
   useEffect(() => {
     onOpenChange(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -39,25 +39,36 @@ export function Sidebar({ isOpen, onOpenChange }: SidebarProps) {
 
   return (
     <>
-      {/* Dim overlay for mobile */}
+      {/* Overlay only under 1100px */}
       <div
-        className={cn("fixed inset-0 z-50 bg-black/60 md:hidden", isOpen ? "block" : "hidden")}
+        className={cn(
+          "fixed inset-0 z-40 bg-black/60 min-[1100px]:hidden",
+          isOpen ? "block" : "hidden"
+        )}
         onClick={() => onOpenChange(false)}
       />
 
-      {/* Drawer / Sidebar */}
+      {/* Drawer (≤1100px) / Fixed sidebar (>1100px) */}
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 w-64 flex flex-col bg-white dark:bg-gray-950 border-r transform transition-transform duration-200 ease-in-out",
           isOpen ? "translate-x-0" : "-translate-x-full",
-          "md:static md:translate-x-0 md:w-64"
+          // Switch to static, always-visible at >1100px
+          "min-[1100px]:static min-[1100px]:translate-x-0 min-[1100px]:w-64"
         )}
       >
         <div className="flex items-center justify-between p-4 border-b">
           <Link href="/" className="flex items-center">
             <span className="text-xl font-bold">Work-ly</span>
           </Link>
-          <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="md:hidden" aria-label="Close menu">
+          {/* Hide the close button above 1100px */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onOpenChange(false)}
+            className="min-[1100px]:hidden"
+            aria-label="Close menu"
+          >
             <X className="h-5 w-5" />
           </Button>
         </div>

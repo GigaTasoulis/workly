@@ -1,23 +1,68 @@
 "use client"
 
-import type React from "react"
-import { useState, useEffect } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { DataTable } from "@/components/data-table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
-import { generateId, getLocalData, setLocalData, logActivity } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Mail, Phone, Building2, Briefcase, DollarSign, Calendar, FileText, Users } from "lucide-react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { TransactionList } from "@/components/TransactionList"
-import { format } from "date-fns"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Mail, Phone, Building2, FileText, Users } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { translations as t } from "@/lib/translations"
+import CustomerPaymentHistory from "@/components/customers/CustomerPaymentHistory"
+
+
+/* ---------------- Status helpers (UI <-> API) ---------------- */
+
+const STATUS_API = ["pending", "paid", "cancelled"] as const
+type StatusApi = (typeof STATUS_API)[number]
+
+const STATUS_UI: Record<StatusApi, "Σε εκκρεμότητα" | "Πληρώθηκε" | "Ακυρώθηκε"> = {
+  pending: "Σε εκκρεμότητα",
+  paid: "Πληρώθηκε",
+  cancelled: "Ακυρώθηκε",
+}
+
+function mapStatusToUi(api: StatusApi): "Σε εκκρεμότητα" | "Πληρώθηκε" | "Ακυρώθηκε" {
+  return STATUS_UI[api]
+}
+function mapStatusToApi(ui: "Σε εκκρεμότητα" | "Πληρώθηκε" | "Ακυρώθηκε"): StatusApi {
+  if (ui === "Σε εκκρεμότητα") return "pending"
+  if (ui === "Πληρώθηκε") return "paid"
+  return "cancelled"
+}
+
+/* ---------------- Types ---------------- */
+
+interface Customer {
+  id: string
+  name: string
+  contactPerson: string
+  email: string
+  phone: string
+  address: string
+  afm: string
+  tractor: string
+  notes: string
+  debt?: number
+}
+
+interface CustomerTransaction {
+  id: string
+  customerId: string
+  productName: string
+  amount: number
+  amountPaid: number
+  date: string              // YYYY-MM-DD
+  status: "Πληρώθηκε" | "Σε εκκρεμότητα" | "Ακυρώθηκε"
+  notes: string
+}
+
+/* ---------------- Mapping helpers ---------------- */
 
 function uiCustomerToApi(c: Partial<Customer>) {
   return {
@@ -29,7 +74,7 @@ function uiCustomerToApi(c: Partial<Customer>) {
     afm: c.afm?.trim(),
     tractor: c.tractor?.trim(),
     notes: c.notes?.trim(),
-  };
+  }
 }
 function apiRowToCustomer(r: any): Customer {
   return {
@@ -42,29 +87,73 @@ function apiRowToCustomer(r: any): Customer {
     afm: r.afm || "",
     tractor: r.tractor || "",
     notes: r.notes || "",
-  };
+    debt: Number(r.debt || 0),
+  }
 }
 
-function uiTxToApi(t: Transaction) {
-  return {
-    customer_id: t.customerId,
-    product_name: t.productName,
-    amount: t.amount,
-    amount_paid: t.amountPaid,
-    status: t.status,
+/* ---------------- API helpers ---------------- */
+
+async function fetchCustomersApi(): Promise<Customer[]> {
+  const r = await fetch(`/api/customers`, { credentials: "include" })
+  if (!r.ok) throw new Error(await r.text())
+  const data = await r.json()
+  const list: any[] = data.customers || []
+  return list.map(apiRowToCustomer)
+}
+
+async function fetchCustomerTransactions(customerId: string, signal?: AbortSignal): Promise<CustomerTransaction[]> {
+  const url = `/api/customer-transactions?customer_id=${encodeURIComponent(customerId)}`
+  const r = await fetch(url, { credentials: "include", signal })
+  if (!r.ok) throw new Error(await r.text())
+  const data = await r.json()
+  const mapped: CustomerTransaction[] = (data.transactions || []).map((t: any) => ({
+    id: t.id,
+    customerId: t.customer_id,
+    productName: t.product_name,
+    amount: Number(t.amount) || 0,
+    amountPaid: Number(t.amount_paid) || 0,
     date: t.date,
-    notes: t.notes,
-  };
+    status: mapStatusToUi(t.status as StatusApi),
+    notes: t.notes || "",
+  }))
+  return mapped
+}
+
+async function createCustomerApi(input: Partial<Customer>): Promise<string> {
+  const r = await fetch(`/api/customers`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(uiCustomerToApi(input)),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  const data = await r.json()
+  return data?.customer?.id as string
+}
+
+async function updateCustomerApi(id: string, input: Partial<Customer>): Promise<void> {
+  const r = await fetch(`/api/customers/${id}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(uiCustomerToApi(input)),
+  })
+  if (!r.ok) throw new Error(await r.text())
+}
+
+async function deleteCustomerApi(id: string): Promise<void> {
+  const r = await fetch(`/api/customers/${id}`, { method: "DELETE", credentials: "include" })
+  if (!r.ok) throw new Error(await r.text())
 }
 
 async function createCustomerTransactionApi(tx: {
-  customerId: string;
-  productName: string;
-  amount: number;
-  amountPaid: number;
-  date: string;
-  status: "paid" | "pending" | "cancelled";
-  notes: string;
+  customerId: string
+  productName: string
+  amount: number
+  amountPaid: number
+  date: string
+  status: "paid" | "pending" | "cancelled"
+  notes: string
 }): Promise<string> {
   const r = await fetch(`/api/customer-transactions`, {
     method: "POST",
@@ -79,29 +168,43 @@ async function createCustomerTransactionApi(tx: {
       status: tx.status,
       notes: tx.notes,
     }),
-  });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j?.error || "Failed to create transaction");
-  return String(j.transaction.id);
+  })
+  const j = await r.json()
+  if (!r.ok) throw new Error(j?.error || "Failed to create transaction")
+  return String(j?.transaction?.id)
 }
 
-
-async function updateCustomerTransactionApi(id: string, input: Transaction): Promise<void> {
+async function updateCustomerTransactionApi(id: string, tx: Partial<CustomerTransaction>): Promise<void> {
   const r = await fetch(`/api/customer-transactions/${id}`, {
     method: "PUT",
     headers: { "content-type": "application/json" },
     credentials: "include",
-    body: JSON.stringify(uiTxToApi(input)),
-  });
-  if (!r.ok) throw new Error(await r.text());
+    body: JSON.stringify({
+      customer_id: tx.customerId,
+      product_name: tx.productName,
+      amount: tx.amount,
+      amount_paid: tx.amountPaid,
+      date: tx.date,
+      status: tx.status ? mapStatusToApi(tx.status) : undefined,
+      notes: tx.notes,
+    }),
+  })
+  if (!r.ok) throw new Error(await r.text())
 }
 
+async function deleteCustomerTransactionApi(id: string): Promise<void> {
+  const r = await fetch(`/api/customer-transactions/${id}`, {
+    method: "DELETE",
+    credentials: "include",
+  })
+  if (!r.ok) throw new Error(await r.text())
+}
 
-async function payTransactionApi(input: {
-  transactionId: string;
-  amount: number;
-  date?: string;
-  notes?: string;
+async function createCustomerPaymentApi(input: {
+  transactionId: string
+  amount: number
+  date?: string
+  notes?: string
 }) {
   const r = await fetch(`/api/customer-payments`, {
     method: "POST",
@@ -113,81 +216,13 @@ async function payTransactionApi(input: {
       date: input.date,
       notes: input.notes,
     }),
-  });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
+  })
+  const j = await r.json()
+  if (!r.ok) throw new Error(j?.error || "Payment failed")
+  return j
 }
 
-
-
-
-async function fetchCustomersApi(): Promise<Customer[]> {
-  const r = await fetch(`/api/customers`, { credentials: "include" });
-  if (!r.ok) throw new Error(await r.text());
-  const data = await r.json();
-  const list: any[] = data.customers || [];
-  return list.map(apiRowToCustomer);
-}
-async function createCustomerApi(input: Partial<Customer>): Promise<string> {
-  const r = await fetch(`/api/customers`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(uiCustomerToApi(input)),
-  });
-  if (!r.ok) throw new Error(await r.text());
-  const data = await r.json();
-  return data?.customer?.id as string;
-}
-async function updateCustomerApi(id: string, input: Partial<Customer>): Promise<void> {
-  const r = await fetch(`/api/customers/${id}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(uiCustomerToApi(input)),
-  });
-  if (!r.ok) throw new Error(await r.text());
-}
-async function deleteCustomerApi(id: string): Promise<void> {
-  const r = await fetch(`/api/customers/${id}`, { method: "DELETE", credentials: "include" });
-  if (!r.ok) throw new Error(await r.text());
-}
-
-interface Customer {
-  id: string
-  name: string
-  contactPerson: string
-  email: string
-  phone: string
-  address: string
-  afm: string
-  tractor: string
-  notes: string
-}
-
-interface Transaction {
-  id: string
-  customerId: string
-  productName: string
-  amount: number
-  amountPaid: number
-  date: string
-  status: "paid" | "pending" | "cancelled"
-  notes: string
-}
-
-interface Payment {
-  id: string;
-  transactionId: string;
-  customerId: string;
-  productName: string;
-  paymentAmount: number;
-  paymentDate: string; // e.g., "2025-03-25"
-  notes?: string;
-}
-
-
-
+/* ---------------- Component ---------------- */
 
 const initialCustomer: Customer = {
   id: "",
@@ -201,469 +236,329 @@ const initialCustomer: Customer = {
   notes: "",
 }
 
-const initialTransaction: Transaction = {
+const emptyTx: CustomerTransaction = {
   id: "",
   customerId: "",
   productName: "",
   amount: 0,
   amountPaid: 0,
-  date: new Date().toISOString().split("T")[0],
-  status: "pending",
+  date: new Date().toISOString().slice(0, 10),
+  status: "Σε εκκρεμότητα",
   notes: "",
 }
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false)
-  const [currentCustomer, setCurrentCustomer] = useState<Customer>(initialCustomer)
-  const [currentTransaction, setCurrentTransaction] = useState<Transaction>(initialTransaction)
-  const [isEditing, setIsEditing] = useState(false)
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const { toast } = useToast()
+
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+
+  const [transactions, setTransactions] = useState<CustomerTransaction[]>([])
+  const txAbortRef = useRef<AbortController | null>(null)
+
+  // dialogs
+  const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false)
+  const [isTxDialogOpen, setIsTxDialogOpen] = useState(false)
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
-  const [paymentAmount, setPaymentAmount] = useState<number>(0)
-  const [isTransactionEditing, setIsTransactionEditing] = useState(false);
-  const [transactionFilter, setTransactionFilter] = useState<"all" | "paid" | "pending">("all");
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [paymentHistoryCustomerFilter, setPaymentHistoryCustomerFilter] = useState<string>("all");
-  const [paymentHistorySortOrder, setPaymentHistorySortOrder] = useState<string>("desc");
-  const [paymentNotes, setPaymentNotes] = useState<string>("");
-  const [currentPaymentPage, setCurrentPaymentPage] = useState(1);
-  const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split("T")[0]);
-  const [paymentCustomerSearch, setPaymentCustomerSearch] = useState<string>("");
-  const paymentsPerPage = 10;
-  const [paying, setPaying] = useState(false);
 
-  const ensureServerTxId = async (tx: Transaction) => {
-    // If it already looks like a UUID-ish 32-hex id, assume server-created.
-    if (/^[a-f0-9]{32}$/i.test(tx.id)) return tx.id;
-  
-    // Create on server first
-    const newId = await createCustomerTransactionApi({
-      customerId: tx.customerId,
-      productName: tx.productName,
-      amount: tx.amount,
-      amountPaid: tx.amountPaid,
-      date: tx.date,
-      status: tx.status,
-      notes: tx.notes,
-    });
-  
-    // Swap ids in local state
-    setTransactions(prev => prev.map(t => (t.id === tx.id ? { ...t, id: newId } : t)));
-    setCurrentTransaction(prev => ({ ...prev, id: newId }));
-    return newId;
-  };
+  // forms
+  const [isEditingCustomer, setIsEditingCustomer] = useState(false)
+  const [currentCustomer, setCurrentCustomer] = useState<Customer>(initialCustomer)
+  const [initialDebt, setInitialDebt] = useState<number>(0)
 
+  const [isEditingTx, setIsEditingTx] = useState(false)
+  const [currentTx, setCurrentTx] = useState<CustomerTransaction>(emptyTx)
+  const [paymentAmount, setPaymentAmount] = useState<string>("")
+  const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().slice(0, 10))
+  const [paymentNotes, setPaymentNotes] = useState<string>("")
 
+  const [txFilter, setTxFilter] = useState<"all" | "paid" | "pending">("all")
+  const [historyRefresh, setHistoryRefresh] = useState(0)
+
+  const eur = useMemo(() => new Intl.NumberFormat("el-GR", { style: "currency", currency: "EUR" }), [])
+  const pendingTxsForSelected = useMemo(
+    () =>
+      selectedCustomer
+        ? transactions.filter(
+            (t) => t.customerId === selectedCustomer.id && mapStatusToApi(t.status) === "pending"
+          )
+        : [],
+    [selectedCustomer?.id, transactions]
+  )
+
+  const selectedOutstanding = useMemo(() => {
+    if (!selectedCustomer) return 0
+    const list = transactions.filter((t) => t.customerId === selectedCustomer.id)
+    return list
+      .filter((t) => mapStatusToApi(t.status) === "pending")
+      .reduce((sum, t) => sum + (Number(t.amount) - Number(t.amountPaid || 0)), 0)
+  }, [selectedCustomer?.id, transactions])
+
+  /* ---------- Initial load ---------- */
   useEffect(() => {
-    (async () => {
+    ;(async () => {
       try {
-        const [serverCustomers] = await Promise.all([
-          fetchCustomersApi(),
-        ]);
-        setCustomers(serverCustomers);
-        setTransactions(getLocalData("transactions") || []);
-        setPayments(getLocalData("payments") || []);
+        const cs = await fetchCustomersApi()
+        setCustomers(cs)
       } catch (e) {
-        console.error(e);
-        toast({ title: "Σφάλμα", description: "Αποτυχία φόρτωσης πελατών.", variant: "destructive" });
+        console.error(e)
+        toast({ title: "Σφάλμα", description: "Αποτυχία φόρτωσης πελατών.", variant: "destructive" })
       }
-    })();
-  }, [toast]);
-  
+    })()
+  }, [toast])
 
+  /* ---------- Load transactions for selected customer ---------- */
+  useEffect(() => {
+    if (!selectedCustomer?.id) return
+    txAbortRef.current?.abort()
+    const ac = new AbortController()
+    txAbortRef.current = ac
+    ;(async () => {
+      try {
+        const list = await fetchCustomerTransactions(selectedCustomer.id, ac.signal)
+        setTransactions(list)
+      } catch (e) {
+        if (!ac.signal.aborted) {
+          console.error(e)
+          toast({ title: "Σφάλμα", description: "Αποτυχία φόρτωσης συναλλαγών.", variant: "destructive" })
+        }
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCustomer?.id])
+
+  /* ---------- Table columns ---------- */
   const columns = [
     { key: "name", label: t.customerName },
     { key: "phone", label: t.phone },
     { key: "afm", label: "ΑΦΜ" },
     { key: "tractor", label: "Τρακτέρ" },
-    { key: "debt", label: "Όφειλές" },
+    { key: "debt", label: "Οφειλές" },
   ]
 
-  const handleAddNew = () => {
+  /* ---------- Customer CRUD ---------- */
+  const handleAddCustomer = () => {
     setCurrentCustomer(initialCustomer)
-    setIsEditing(false)
-    setIsDialogOpen(true)
+    setInitialDebt(0)
+    setIsEditingCustomer(false)
+    setIsCustomerDialogOpen(true)
+  }
+  const handleEditCustomer = (c: Customer) => {
+    setCurrentCustomer(c)
+    setIsEditingCustomer(true)
+    setIsCustomerDialogOpen(true)
+  }
+  const handleDeleteCustomer = async (id: string) => {
+    try {
+      await deleteCustomerApi(id)
+      if (selectedCustomer?.id === id) setSelectedCustomer(null)
+      const cs = await fetchCustomersApi()
+      setCustomers(cs)
+      toast({ title: "Διαγράφηκε", description: "Ο πελάτης διαγράφηκε." })
+    } catch (e) {
+      console.error(e)
+      toast({ title: "Σφάλμα", description: "Αποτυχία διαγραφής.", variant: "destructive" })
+    }
+  }
+  const handleCustomerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const name = currentCustomer.name?.trim()
+    if (!name) {
+      toast({ title: "Σφάλμα", description: "Το όνομα είναι υποχρεωτικό.", variant: "destructive" })
+      return
+    }
+    try {
+      if (isEditingCustomer) {
+        await updateCustomerApi(currentCustomer.id, currentCustomer)
+        toast({ title: "Ενημερώθηκε", description: "Ο πελάτης ενημερώθηκε." })
+      } else {
+        const createdId = await createCustomerApi(currentCustomer)
+        // Optional opening balance (receivable) -> create a pending transaction
+        if (createdId && initialDebt > 0) {
+          try {
+            await createCustomerTransactionApi({
+              customerId: createdId,
+              productName: "Υπόλοιπο Έναρξης",
+              amount: Number(initialDebt),
+              amountPaid: 0,
+              date: new Date().toISOString().slice(0, 10),
+              status: "pending",
+              notes: "Αρχικό υπόλοιπο",
+            })
+          } catch (e) {
+            console.warn("Opening balance transaction failed:", e)
+          }
+        }
+      }
+      setIsCustomerDialogOpen(false)
+      const cs = await fetchCustomersApi()
+      setCustomers(cs)
+      if (selectedCustomer?.id) {
+        const list = await fetchCustomerTransactions(selectedCustomer.id)
+        setTransactions(list)
+      }
+    } catch (e) {
+      console.error(e)
+      toast({ title: "Σφάλμα", description: "Αποτυχία αποθήκευσης πελάτη.", variant: "destructive" })
+    }
   }
 
-  const handlePaymentSubmit = async () => {
-    if (paying) return;
-    const remaining = Number(currentTransaction.amount) - Number(currentTransaction.amountPaid);
-    if (paymentAmount <= 0 || paymentAmount > remaining) {
-      toast({ title: "Error", description: "Invalid payment amount.", variant: "destructive" });
-      return;
+  /* ---------- Transactions ---------- */
+  const filteredCustomerTx = useMemo(() => {
+    if (!selectedCustomer) return []
+    let list = transactions.filter((t) => t.customerId === selectedCustomer.id)
+    if (txFilter !== "all") {
+      list = list.filter((t) => mapStatusToApi(t.status) === txFilter)
     }
-  
-    setPaying(true);
+    return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  }, [transactions, selectedCustomer, txFilter])
+
+  const handleAddTx = () => {
+    if (!selectedCustomer) return
+    setCurrentTx({ ...emptyTx, customerId: selectedCustomer.id })
+    setIsEditingTx(false)
+    setIsTxDialogOpen(true)
+  }
+  const handleEditTx = (tx: CustomerTransaction) => {
+    if (mapStatusToApi(tx.status) === "paid") {
+      toast({ title: "Μη επεξεργάσιμο", description: "Η συναλλαγή είναι εξοφλημένη.", variant: "destructive" })
+      return
+    }
+    setCurrentTx(tx)
+    setIsEditingTx(true)
+    setIsTxDialogOpen(true)
+  }
+  const handleDeleteTx = async (id: string) => {
+    if (!selectedCustomer?.id) return
+    if (!confirm("Διαγραφή συναλλαγής;")) return
     try {
-      const txId = await ensureServerTxId(currentTransaction);
-  
-      await payTransactionApi({
-        transactionId: txId,
-        amount: paymentAmount,
+      await deleteCustomerTransactionApi(id)
+      const list = await fetchCustomerTransactions(selectedCustomer.id)
+      setTransactions(list)
+      const cs = await fetchCustomersApi()
+      setCustomers(cs)
+      toast({ title: "Διαγράφηκε", description: "Η συναλλαγή διαγράφηκε." })
+    } catch (e) {
+      console.error(e)
+      toast({ title: "Σφάλμα", description: "Αποτυχία διαγραφής.", variant: "destructive" })
+    }
+  }
+  const handleTxSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const tx = currentTx
+    if (!tx.customerId || !tx.productName?.trim() || !Number.isFinite(tx.amount)) {
+      toast({ title: "Σφάλμα", description: "Προϊόν και ποσό είναι υποχρεωτικά.", variant: "destructive" })
+      return
+    }
+    const payload = {
+      customerId: tx.customerId,
+      productName: tx.productName.trim(),
+      amount: Number(tx.amount),
+      amountPaid: Number(tx.amountPaid || 0),
+      date: tx.date || new Date().toISOString().slice(0, 10),
+      status: mapStatusToApi(tx.status),
+      notes: tx.notes || "",
+    }
+    try {
+      if (isEditingTx && tx.id) {
+        await updateCustomerTransactionApi(tx.id, {
+          ...tx,
+          status: tx.status,
+        })
+        toast({ title: "Ενημερώθηκε", description: "Η συναλλαγή ενημερώθηκε." })
+      } else {
+        await createCustomerTransactionApi(payload)
+        toast({ title: "Προστέθηκε", description: "Η συναλλαγή προστέθηκε." })
+      }
+      setIsTxDialogOpen(false)
+      const list = await fetchCustomerTransactions(tx.customerId)
+      setTransactions(list)
+      const cs = await fetchCustomersApi()
+      setCustomers(cs)
+    } catch (e) {
+      console.error(e)
+      toast({ title: "Σφάλμα", description: "Αποτυχία αποθήκευσης συναλλαγής.", variant: "destructive" })
+    }
+  }
+
+  /* ---------- Payments (Revenue) ---------- */
+  const openPaymentForSelected = () => {
+    if (!selectedCustomer) return
+    const pending = pendingTxsForSelected.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    if (pending.length === 0) {
+      toast({ title: "Δεν υπάρχουν εκκρεμείς οφειλές", description: "Ο πελάτης δεν έχει ανοιχτές οφειλές." })
+      return
+    }
+    setCurrentTx(pending[0])
+    setPaymentAmount("")
+    setPaymentDate(new Date().toISOString().slice(0, 10))
+    setPaymentNotes("")
+    setIsPaymentDialogOpen(true)
+  }
+
+  const openPaymentForTx = (tx: CustomerTransaction) => {
+    setCurrentTx(tx)
+    setPaymentAmount("")
+    setPaymentDate(new Date().toISOString().slice(0, 10))
+    setPaymentNotes("")
+    setIsPaymentDialogOpen(true)
+  }
+
+  const handlePaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const tx = currentTx
+    if (!tx?.id) return
+    const remaining = Number(tx.amount) - Number(tx.amountPaid || 0)
+    const amountNum = parseFloat(String(paymentAmount).replace(",", "."))
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      toast({ title: "Σφάλμα", description: "Μη έγκυρο ποσό πληρωμής.", variant: "destructive" })
+      return
+    }
+    if (amountNum > remaining) {
+      toast({ title: "Σφάλμα", description: "Το ποσό υπερβαίνει το υπόλοιπο.", variant: "destructive" })
+      return
+    }
+    try {
+      await createCustomerPaymentApi({
+        transactionId: tx.id,
+        amount: amountNum,
         date: paymentDate,
         notes: paymentNotes,
-      });
-  
-      // Optimistic local update using the exact id we paid
-      setTransactions(prev =>
-        prev.map(t =>
-          t.id === txId
-            ? {
-                ...t,
-                amountPaid: (Number(t.amountPaid) || 0) + paymentAmount,
-                status:
-                  (Number(t.amountPaid) || 0) + paymentAmount >= Number(t.amount) ? "paid" : t.status,
-              }
-            : t
-        )
-      );
-  
-      toast({ title: "Payment successful", description: "The payment has been recorded." });
-      setIsPaymentDialogOpen(false);
-      setPaymentAmount(0);
-      setPaymentDate(new Date().toISOString().split("T")[0]);
-      logActivity({
-        type: "transaction",
-        action: t.transactionPaid,
-        name: currentTransaction.productName,
-        time: "Just now",
-        iconKey: "euroSign",
-        iconColor: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
-      });
+      })
+      toast({ title: "Επιτυχία", description: "Η είσπραξη καταχωρήθηκε (έσοδο)." })
+      setIsPaymentDialogOpen(false)
+      // refresh transactions + customers + history
+      if (selectedCustomer?.id) {
+        const list = await fetchCustomerTransactions(selectedCustomer.id)
+        setTransactions(list)
+        const cs = await fetchCustomersApi()
+        setCustomers(cs)
+        setHistoryRefresh((k) => k + 1)
+      }
     } catch (e: any) {
-      console.error(e);
-      toast({ title: "Σφάλμα", description: e?.message || "Payment failed.", variant: "destructive" });
-    } finally {
-      setPaying(false);
-    }
-  };
-  
-  
-  
-
-  const handleEdit = (customer: Customer) => {
-    setCurrentCustomer(customer)
-    setIsEditing(true)
-    setIsDialogOpen(true)
-  }
-
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteCustomerApi(id);
-      const fresh = await fetchCustomersApi();
-      setCustomers(fresh);
-      toast({ title: "Customer deleted", description: "The customer has been successfully deleted." });
-    } catch (err) {
-      console.error(err);
-      toast({ title: "Σφάλμα", description: "Αποτυχία διαγραφής πελάτη.", variant: "destructive" });
-    }
-  };  
-
-  const handleDeleteTransaction = (transactionId: string) => {
-    if (confirm("Are you sure you want to delete this transaction?")) {
-      const updatedTransactions = transactions.filter((t) => t.id !== transactionId);
-      setTransactions(updatedTransactions);
-      setLocalData("transactions", updatedTransactions);
-      toast({
-        title: "Transaction Deleted",
-        description: "The transaction has been successfully deleted.",
-      });
-    }
-  };
-  
-
-  const getDebt = (customerId: string) => {
-    return transactions
-      .filter((t) => t.customerId === customerId && t.status === "pending")
-      .reduce((sum, t) => sum + (t.amount - (t.amountPaid || 0)), 0);
-  };
-  
-  const customersWithDebt = customers.map(customer => ({
-    ...customer,
-    debt: getDebt(customer.id),
-  }));
-
-  const handleEditTransaction = (transaction: any) => {
-    setCurrentTransaction(transaction);
-    setIsTransactionEditing(true);
-    setIsTransactionDialogOpen(true);
-  };
-
-  const handleOpenPaymentDialog = (transaction: any) => {
-    setCurrentTransaction(transaction);
-    setPaymentAmount(0); // Reset previous payment value
-    setIsPaymentDialogOpen(true);
-  };
-  
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-  
-    if (!currentCustomer.name) {
-      toast({
-        title: "Error",
-        description: "Name is a required field.",
-        variant: "destructive",
-      });
-      return;
-    }
-  
-    try {
-      if (isEditing) {
-        await updateCustomerApi(currentCustomer.id, currentCustomer);
-        toast({ title: "Customer updated", description: "The customer has been successfully updated." });
-      } else {
-        await createCustomerApi(currentCustomer);
-        toast({ title: "Customer added", description: "The customer has been successfully added." });
-      }
-  
-      const fresh = await fetchCustomersApi();
-      setCustomers(fresh);
-      setIsDialogOpen(false);
-    } catch (err) {
-      console.error(err);
-      toast({ title: "Σφάλμα", description: "Αποτυχία αποθήκευσης πελάτη.", variant: "destructive" });
-    }
-  };
-  
-
-  const handleAddTransaction = () => {
-    if (!selectedCustomer) return;
-    setCurrentTransaction({
-      ...initialTransaction,
-      customerId: selectedCustomer.id,
-    });
-    setIsTransactionEditing(false); // Reset the editing flag for new transactions
-    setIsTransactionDialogOpen(true);
-  }  
-
-  const handleTransactionSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-  
-    if (!currentTransaction.productName || !currentTransaction.amount) {
-      toast({ title: "Σφάλμα", description: "Το όνομα του προϊόντος και το ποσό είναι υποχρεωτικά.", variant: "destructive" });
-      return;
-    }
-  
-    const tx = { ...currentTransaction };
-    if (tx.amountPaid >= tx.amount) tx.status = "paid";
-  
-    try {
-      if (isTransactionEditing) {
-        await updateCustomerTransactionApi(tx.id, tx);
-        setTransactions(prev => prev.map(t => (t.id === tx.id ? tx : t)));
-        toast({ title: "Η συναλλαγή ενημερώθηκε", description: "Η συναλλαγή ενημερώθηκε επιτυχώς." });
-        setIsTransactionEditing(false);
-      } else {
-        // Create on server once, then store the returned id
-        const newId = await createCustomerTransactionApi({
-          customerId: tx.customerId,
-          productName: tx.productName,
-          amount: tx.amount,
-          amountPaid: tx.amountPaid,
-          date: tx.date,
-          status: tx.status,
-          notes: tx.notes,
-        });
-        const saved = { ...tx, id: newId };
-        setTransactions(prev => [...prev, saved]);
-        setLocalData("transactions", [...transactions, saved]);
-        toast({ title: "Η συναλλαγή προστέθηκε", description: "Η συναλλαγή καταχωρήθηκε επιτυχώς." });
-      }
-      setIsTransactionDialogOpen(false);
-    } catch (err) {
-      console.error(err);
-      toast({ title: "Σφάλμα", description: "Αποτυχία αποθήκευσης συναλλαγής.", variant: "destructive" });
-    }
-  };
-  
-  
-   
-
-  const getCustomerTransactions = (customerId: string) => {
-    let filtered = transactions.filter((t) => t.customerId === customerId);
-    if (transactionFilter !== "all") {
-      filtered = filtered.filter((t) => t.status === transactionFilter);
-    }
-    return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  };
-
-  const getTotalSpent = (customerId: string) => {
-    return transactions
-      .filter((t) => t.customerId === customerId)
-      .reduce((sum, t) => sum + (Number(t.amountPaid) || 0), 0);
-  };  
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "paid":
-        return "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
-      case "pending":
-        return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
-      case "cancelled":
-        return "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
-      default:
-        return "bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300"
+      console.error(e)
+      toast({ title: "Σφάλμα", description: e?.message || "Αποτυχία πληρωμής.", variant: "destructive" })
     }
   }
 
-  const renderTransactionsTab = () => (
-    <TabsContent value="transactions" className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex flex-col">
-          <h3 className="text-sm font-medium">{t.transactionHistory}</h3>
-          <p className="text-sm text-muted-foreground">
-            {t.totalSpent}: €{getTotalSpent(selectedCustomer?.id || "").toLocaleString()}
-          </p>
-        </div>
-        <Button onClick={handleAddTransaction} size="sm">
-          {t.addTransaction}
-        </Button>
-      </div>
-      <div className="mb-4">
-        <Select
-          value={transactionFilter}
-          onValueChange={(value: "all" | "paid" | "pending") => setTransactionFilter(value)}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Filter by Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Όλες</SelectItem>
-            <SelectItem value="paid">Πληρωμένες</SelectItem>
-            <SelectItem value="pending">Εκκρεμείς</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <TransactionList
-        transactions={getCustomerTransactions(selectedCustomer?.id || "")}
-        onEdit={handleEditTransaction}
-        onDelete={handleDeleteTransaction}
-        onPayment={handleOpenPaymentDialog}
-        getStatusColor={getStatusColor}
-      />
-    </TabsContent>
-  );
-  
-  const renderCustomerCard = () => (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex justify-between items-start">
-          <div>
-            <CardTitle>{selectedCustomer?.name}</CardTitle>
-            <CardDescription>Πληροφορίες Πελάτη</CardDescription>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="details">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="details">{t.details}</TabsTrigger>
-            <TabsTrigger value="transactions">{t.transactions}</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="details" className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium">Επικοινωνία</h3>
-              <div className="grid gap-2">
-                <div className="flex items-center text-sm">
-                  <Mail className="h-4 w-4 mr-2 text-muted-foreground" />
-                  {selectedCustomer?.email}
-                </div>
-                <div className="flex items-center text-sm">
-                  <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
-                  {selectedCustomer?.phone || "Not provided"}
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium">Διεύθυνση</h3>
-              <div className="flex items-center text-sm">
-                <Building2 className="h-4 w-4 mr-2 text-muted-foreground" />
-                {selectedCustomer?.address || "Not provided"}
-              </div>
-            </div>
-
-            {(selectedCustomer?.afm || selectedCustomer?.tractor) && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium">Περισσότερες πληροφορίες</h3>
-                {selectedCustomer?.afm && (
-                  <p className="text-sm text-muted-foreground">
-                    <strong>ΑΦΜ:</strong> {selectedCustomer.afm}
-                  </p>
-                )}
-                {selectedCustomer?.tractor && (
-                  <p className="text-sm text-muted-foreground">
-                    <strong>Τρακτέρ:</strong> {selectedCustomer.tractor}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {selectedCustomer?.notes && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium">Σημειώσεις</h3>
-                <div className="flex items-start text-sm">
-                  <FileText className="h-4 w-4 mr-2 text-muted-foreground mt-0.5" />
-                  <span>{selectedCustomer.notes}</span>
-                </div>
-              </div>
-            )}
-
-            <div className="flex space-x-2 pt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (selectedCustomer) {
-                    handleEdit(selectedCustomer)
-                  }
-                }}
-                className="flex-1"
-              >
-                Edit
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => {
-                  if (selectedCustomer && confirm("Are you sure you want to delete this employee?")) {
-                    handleDelete(selectedCustomer.id)
-                  }
-                }}
-                className="flex-1"
-              >
-                Delete
-              </Button>
-            </div>
-          </TabsContent>
-
-          {renderTransactionsTab()}
-        </Tabs>
-      </CardContent>
-    </Card>
-  )
-  // Filter payments by customer if not "all"
-  let filteredPayments: Payment[] = payments;
-  if (paymentHistoryCustomerFilter !== "all") {
-    filteredPayments = filteredPayments.filter((p: Payment) => p.customerId === paymentHistoryCustomerFilter);
+  /* ---------- CSV export ---------- */
+  function exportSelectedTransactionsCSV() {
+    if (!selectedCustomer) return
+    const rows = transactions.filter((t) => t.customerId === selectedCustomer.id)
+    const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`
+    const header = ["Date", "Product", "Amount", "Paid", "Status", "Notes"].map(esc).join(",")
+    const body = rows
+      .map((r) => [r.date, r.productName, r.amount, r.amountPaid, r.status, r.notes].map(esc).join(","))
+      .join("\n")
+    const blob = new Blob([`${header}\n${body}`], { type: "text/csv;charset=utf-8;" })
+    const a = document.createElement("a")
+    a.href = URL.createObjectURL(blob)
+    a.download = `customer-${selectedCustomer.name}-transactions.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
   }
-  // Sort payments by date based on sort order:
-  filteredPayments.sort((a: Payment, b: Payment) =>
-    paymentHistorySortOrder === "desc"
-      ? new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime()
-      : new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime()
-  );
 
-  const startPaymentIndex = (currentPaymentPage - 1) * paymentsPerPage;
-  const paginatedPayments = filteredPayments.slice(startPaymentIndex, startPaymentIndex + paymentsPerPage);
-
-
+  /* ---------- UI ---------- */
   return (
     <div className="space-y-6">
       <div>
@@ -672,20 +567,93 @@ export default function CustomersPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Customers table */}
         <div className="md:col-span-2">
           <DataTable
             columns={columns}
-            data={customersWithDebt}
-            onAdd={handleAddNew}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onSelect={setSelectedCustomer}
+            data={customers}
+            onAdd={handleAddCustomer}
+            onEdit={handleEditCustomer}
+            onDelete={handleDeleteCustomer}
+            onSelect={(c: Customer) => setSelectedCustomer(c)}
           />
         </div>
 
+        {/* Customer details card (parity with Suppliers) */}
         <div>
           {selectedCustomer ? (
-            renderCustomerCard()
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle>{selectedCustomer.name}</CardTitle>
+                    <CardDescription>Πληροφορίες Πελάτη</CardDescription>
+                  </div>
+                  <Badge variant="outline" className="ml-2">
+                    <Users className="h-3 w-3 mr-1" />
+                    Πελάτης
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-2">
+                  <div className="flex items-center text-sm">
+                    <Mail className="h-4 w-4 mr-2 text-muted-foreground" />
+                    {selectedCustomer.email || "—"}
+                  </div>
+                  <div className="flex items-center text-sm">
+                    <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
+                    {selectedCustomer.phone || "—"}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">Διεύθυνση</h3>
+                  <div className="flex items-start text-sm">
+                    <Building2 className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <span>{selectedCustomer.address || "—"}</span>
+                  </div>
+                </div>
+
+                {(selectedCustomer.afm || selectedCustomer.tractor) && (
+                  <div className="space-y-1 text-sm">
+                    {selectedCustomer.afm && <p><strong>ΑΦΜ:</strong> {selectedCustomer.afm}</p>}
+                    {selectedCustomer.tractor && <p><strong>Τρακτέρ:</strong> {selectedCustomer.tractor}</p>}
+                  </div>
+                )}
+
+                {selectedCustomer.notes && (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium">Σημειώσεις</h3>
+                    <div className="flex items-start text-sm">
+                      <FileText className="h-4 w-4 mr-2 text-muted-foreground mt-0.5" />
+                      <span>{selectedCustomer.notes}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex space-x-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditCustomer(selectedCustomer)}
+                    className="flex-1"
+                  >
+                    Επεξεργασία
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      if (confirm("Να διαγραφεί αυτός ο πελάτης;")) handleDeleteCustomer(selectedCustomer.id)
+                    }}
+                    className="flex-1"
+                  >
+                    Διαγραφή
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           ) : (
             <Card>
               <CardHeader>
@@ -694,10 +662,9 @@ export default function CustomersPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Click on a customer from the list to view their complete details, transaction history, and manage
-                  their transactions.
+                  Επιλέξτε πελάτη για να δείτε λεπτομέρειες και ενέργειες.
                 </p>
-                <Button onClick={handleAddNew} className="mt-4 w-full">
+                <Button onClick={handleAddCustomer} className="mt-4 w-full">
                   {t.addNewCustomer}
                 </Button>
               </CardContent>
@@ -706,12 +673,39 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      {/* Actions bar under the table (same layout as Suppliers) */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="text-sm text-muted-foreground">
+          {selectedCustomer
+            ? <>Ενέργειες για: <span className="font-medium text-foreground">{selectedCustomer.name}</span></>
+            : "Επιλέξτε πελάτη για ενέργειες"}
+        </div>
+        {selectedCustomer && (
+          <div className="text-sm text-muted-foreground">
+            Εκκρεμείς συναλλαγές: <span className="font-medium">{pendingTxsForSelected.length}</span> • Υπόλοιπο:{" "}
+            <span className="font-medium text-foreground">{eur.format(selectedOutstanding)}</span>
+          </div>
+        )}
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button size="sm" variant="secondary" onClick={handleAddTx} disabled={!selectedCustomer} className="w-full sm:w-auto">
+            Προσθήκη Οφειλής
+          </Button>
+          <Button size="sm" onClick={openPaymentForSelected} disabled={!selectedCustomer || pendingTxsForSelected.length === 0} className="w-full sm:w-auto">
+            Είσπραξη
+          </Button>
+          <Button size="sm" variant="outline" onClick={exportSelectedTransactionsCSV} disabled={!selectedCustomer}>
+            Εξαγωγή CSV
+          </Button>
+        </div>
+      </div>
+
+      {/* Dialog: Add/Edit Customer */}
+      <Dialog open={isCustomerDialogOpen} onOpenChange={setIsCustomerDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>{isEditing ? t.editCustomer : t.addNewCustomer}</DialogTitle>
+            <DialogTitle>{isEditingCustomer ? t.editCustomer : t.addNewCustomer}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleCustomerSubmit}>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -732,12 +726,12 @@ export default function CustomersPage() {
                   />
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">{t.email}</Label>
                   <Input
                     id="email"
-                    type="text"
                     value={currentCustomer.email}
                     onChange={(e) => setCurrentCustomer({ ...currentCustomer, email: e.target.value })}
                   />
@@ -751,6 +745,7 @@ export default function CustomersPage() {
                   />
                 </div>
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="address">{t.address}</Label>
                 <Input
@@ -759,24 +754,18 @@ export default function CustomersPage() {
                   onChange={(e) => setCurrentCustomer({ ...currentCustomer, address: e.target.value })}
                 />
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="afm">ΑΦΜ</Label>
-                  <Input
-                    id="afm"
-                    value={currentCustomer.afm}
-                    onChange={(e) => setCurrentCustomer({ ...currentCustomer, afm: e.target.value })}
-                  />
+                  <Input id="afm" value={currentCustomer.afm} onChange={(e) => setCurrentCustomer({ ...currentCustomer, afm: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="tractor">Τρακτέρ</Label>
-                  <Input
-                    id="tractor"
-                    value={currentCustomer.tractor}
-                    onChange={(e) => setCurrentCustomer({ ...currentCustomer, tractor: e.target.value })}
-                  />
+                  <Input id="tractor" value={currentCustomer.tractor} onChange={(e) => setCurrentCustomer({ ...currentCustomer, tractor: e.target.value })} />
                 </div>
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="notes">{t.notes}</Label>
                 <Textarea
@@ -786,116 +775,46 @@ export default function CustomersPage() {
                   rows={3}
                 />
               </div>
+
+              {!isEditingCustomer && (
+                <div className="space-y-2">
+                  <Label htmlFor="opening">Αρχικό Υπόλοιπο (προαιρετικό)</Label>
+                  <Input
+                    id="opening"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={initialDebt}
+                    onChange={(e) => setInitialDebt(parseFloat(e.target.value || "0"))}
+                  />
+                </div>
+              )}
             </div>
+
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancel
+              <Button type="button" variant="outline" onClick={() => setIsCustomerDialogOpen(false)}>
+                {t.cancel}
               </Button>
-              <Button type="submit">{isEditing ? "Update" : "Add"}</Button>
+              <Button type="submit">{isEditingCustomer ? t.update : t.add}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
+      {/* Dialog: Add/Edit Transaction */}
+      <Dialog open={isTxDialogOpen} onOpenChange={setIsTxDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Πληρωμή</DialogTitle>
+            <DialogTitle>{isEditingTx ? "Ενημέρωση Συναλλαγής" : t.addTransaction}</DialogTitle>
           </DialogHeader>
-          <form
-            onSubmit={ async (e) => {
-              e.preventDefault();
-              await handlePaymentSubmit();
-            }}
-          >
-            <div className="grid gap-4 py-4">
-              <div>
-                <p>
-                  <strong>Προϊόν:</strong> {currentTransaction.productName}
-                </p>
-                <p>
-                  <strong>Συνολικό ποσό:</strong>{" "}
-                  €{(Number(currentTransaction.amount) || 0).toLocaleString()}
-                </p>
-                <p>
-                  <strong>Πληρωμένο ποσό:</strong>{" "}
-                  €{(Number(currentTransaction.amountPaid) || 0).toLocaleString()}
-                </p>
-                <p>
-                  <strong>Υπόλοιπο:</strong>{" "}
-                  €{(Number(currentTransaction.amount) - Number(currentTransaction.amountPaid) || 0).toLocaleString()}
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="paymentAmount">Ποσό πληρωμής</Label>
-                <Input
-                  id="paymentAmount"
-                  type="number"
-                  min="0"
-                  max={currentTransaction.amount - currentTransaction.amountPaid}
-                  step="0.01"
-                  value={paymentAmount}
-                  onChange={(e) =>
-                    setPaymentAmount(Number.parseFloat(e.target.value) || 0)
-                  }
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="paymentDate">Ημερομηνία Πληρωμής</Label>
-                <Input
-                  id="paymentDate"
-                  type="date"
-                  value={paymentDate}
-                  onChange={(e) => setPaymentDate(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-gray-200 dark:text-gray-900"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="paymentNotes">Σημειώσεις (προαιρετικά)</Label>
-                <Textarea
-                  id="paymentNotes"
-                  placeholder="Προσθέστε σημειώσεις για αυτή την πληρωμή (προαιρετικά)"
-                  rows={3}
-                  value={paymentNotes}
-                  onChange={(e) => setPaymentNotes(e.target.value)}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsPaymentDialogOpen(false)}>
-                Ακύρωση
-              </Button>
-              <Button type="submit" disabled={paying}>
-                {paying ? "Πληρωμή…" : "Πληρωμή"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Transaction Dialog */}
-      <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>
-              {isTransactionEditing ? "Ενημέρωση Συναλλαγής" : t.addTransaction}
-            </DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleTransactionSubmit}>
+          <form onSubmit={handleTxSubmit}>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="productName">{t.productName} *</Label>
                 <Input
                   id="productName"
-                  value={currentTransaction.productName}
-                  onChange={(e) =>
-                    setCurrentTransaction({
-                      ...currentTransaction,
-                      productName: e.target.value,
-                    })
-                  }
+                  value={currentTx.productName}
+                  onChange={(e) => setCurrentTx({ ...currentTx, productName: e.target.value })}
                   required
                 />
               </div>
@@ -905,15 +824,10 @@ export default function CustomersPage() {
                   <Input
                     id="amount"
                     type="number"
-                    min="0"
+                    inputMode="decimal"
                     step="0.01"
-                    value={currentTransaction.amount}
-                    onChange={(e) =>
-                      setCurrentTransaction({
-                        ...currentTransaction,
-                        amount: Number.parseFloat(e.target.value),
-                      })
-                    }
+                    value={String(currentTx.amount)}
+                    onChange={(e) => setCurrentTx({ ...currentTx, amount: parseFloat(e.target.value || "0") })}
                     required
                   />
                 </div>
@@ -922,49 +836,38 @@ export default function CustomersPage() {
                   <Input
                     id="date"
                     type="date"
-                    value={currentTransaction.date}
                     className="dark:bg-gray-200 dark:text-gray-900"
-                    onChange={(e) =>
-                      setCurrentTransaction({
-                        ...currentTransaction,
-                        date: e.target.value,
-                      })
-                    }
+                    value={currentTx.date}
+                    onChange={(e) => setCurrentTx({ ...currentTx, date: e.target.value })}
                   />
                 </div>
               </div>
-              {/* New Partial Payment Input */}
               <div className="space-y-2">
                 <Label htmlFor="amountPaid">Εξοφλημένο Ποσό</Label>
                 <Input
                   id="amountPaid"
                   type="number"
-                  min="0"
+                  inputMode="decimal"
                   step="0.01"
-                  value={currentTransaction.amountPaid}
-                  onChange={(e) =>
-                    setCurrentTransaction({
-                      ...currentTransaction,
-                      amountPaid: Number.parseFloat(e.target.value) || 0,
-                    })
-                  }
+                  value={String(currentTx.amountPaid)}
+                  onChange={(e) => setCurrentTx({ ...currentTx, amountPaid: parseFloat(e.target.value || "0") })}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="status">{t.status}</Label>
                 <Select
-                  value={currentTransaction.status}
-                  onValueChange={(value: "paid" | "pending" | "cancelled") =>
-                    setCurrentTransaction({ ...currentTransaction, status: value })
+                  value={mapStatusToApi(currentTx.status)}
+                  onValueChange={(v: "paid" | "pending" | "cancelled") =>
+                    setCurrentTx({ ...currentTx, status: mapStatusToUi(v as StatusApi) })
                   }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Επιλέξτε κατάσταση" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="paid">{t.paid}</SelectItem>
-                    <SelectItem value="pending">{t.pending}</SelectItem>
-                    <SelectItem value="cancelled">{t.cancelled}</SelectItem>
+                    <SelectItem value="paid">Πληρώθηκε</SelectItem>
+                    <SelectItem value="pending">Σε εκκρεμότητα</SelectItem>
+                    <SelectItem value="cancelled">Ακυρώθηκε</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -972,171 +875,101 @@ export default function CustomersPage() {
                 <Label htmlFor="notes">{t.notes}</Label>
                 <Textarea
                   id="notes"
-                  value={currentTransaction.notes}
-                  onChange={(e) =>
-                    setCurrentTransaction({
-                      ...currentTransaction,
-                      notes: e.target.value,
-                    })
-                  }
+                  value={currentTx.notes}
+                  onChange={(e) => setCurrentTx({ ...currentTx, notes: e.target.value })}
                   rows={3}
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsTransactionDialogOpen(false)}>
-                Ακύρωση
+              <Button type="button" variant="outline" onClick={() => setIsTxDialogOpen(false)}>
+                {t.cancel}
               </Button>
-              <Button type="submit">
-                {isTransactionEditing ? "Αποθήκευση" : t.addTransaction}
-              </Button>
+              <Button type="submit">{isEditingTx ? "Αποθήκευση" : t.addTransaction}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold tracking-tight">Ιστορικό Πληρωμών</h2>
-        <div className="flex gap-4 mb-4">
-          {/* Customer Filter */}
-          <Select
-            value={paymentHistoryCustomerFilter}
-            onValueChange={(value) => setPaymentHistoryCustomerFilter(value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Φιλτράρισμα κατά Πελάτη" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Όλοι</SelectItem>
-              {customers.map((cust) => (
-                <SelectItem key={cust.id} value={cust.id}>
-                  {cust.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {/* Sort Order Filter */}
-          <Select
-            value={paymentHistorySortOrder}
-            onValueChange={(value) => setPaymentHistorySortOrder(value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Ταξινόμηση κατά Ημερομηνία" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="desc">Νεότερες</SelectItem>
-              <SelectItem value="asc">Παλαιότερες</SelectItem>
-            </SelectContent>
-          </Select>
-          <Input
-            type="text"
-            placeholder="Αναζήτηση πελάτη..."
-            value={paymentCustomerSearch}
-            onChange={(e) => setPaymentCustomerSearch(e.target.value)}
-            className="w-full md:max-w-sm"
-          />
-        </div>
-        {(() => {
-          // Filter payments by customer if not "all"
-          let filteredPayments: Payment[] = payments;
-          if (paymentHistoryCustomerFilter !== "all") {
-            filteredPayments = filteredPayments.filter((p: Payment) => p.customerId === paymentHistoryCustomerFilter);
-          }
 
-          // Now apply the manual search filtering by customer name:
-          if (paymentCustomerSearch.trim() !== "") {
-            filteredPayments = filteredPayments.filter((p: Payment) => {
-              const customer = customers.find((c) => c.id === p.customerId);
-              if (!customer) return false;
-              return customer.name.toLowerCase().includes(paymentCustomerSearch.toLowerCase());
-            });
-          }
-
-          // Then sort payments by date based on sort order:
-          filteredPayments.sort((a: Payment, b: Payment) =>
-            paymentHistorySortOrder === "desc"
-              ? new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime()
-              : new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime()
-          );
-          return (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-800">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Πελάτης
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Συναλλαγή
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Προϊόν
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Ποσό Πληρωμής
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Ημ/νία
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Σημειώσεις
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                  {filteredPayments.map((p: Payment) => {
-                    const cust = customers.find((c) => c.id === p.customerId);
-                    const transactionForPayment = transactions.find((tr) => tr.id === p.transactionId);
-                    return (
-                      <tr key={p.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
-                          {cust ? cust.name : "Unknown"}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
-                          {transactionForPayment ? transactionForPayment.productName : "N/A"}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
-                          {p.productName}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
-                          €{p.paymentAmount.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
-                          {p.paymentDate}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-50">
-                          {p.notes || "-"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <div className="flex justify-center items-center mt-4 space-x-4">
-                <Button
-                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
-                  disabled={currentPaymentPage === 1}
-                  onClick={() => setCurrentPaymentPage(currentPaymentPage - 1)}
-                >
-                  ←
-                </Button>
-                <span className="text-sm font-medium">
-                  {currentPaymentPage} / {Math.ceil(filteredPayments.length / paymentsPerPage)}
-                </span>
-                <Button
-                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-md px-3"
-                  disabled={
-                    currentPaymentPage === Math.ceil(filteredPayments.length / paymentsPerPage) ||
-                    Math.ceil(filteredPayments.length / paymentsPerPage) === 0
-                  }
-                  onClick={() => setCurrentPaymentPage(currentPaymentPage + 1)}
-                >
-                  →
-                </Button>
+      {/* Dialog: Payment (Revenue) */}
+      <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Είσπραξη</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handlePaymentSubmit}>
+            <div className="grid gap-4 py-4">
+              {pendingTxsForSelected.length > 1 && (
+                <div className="space-y-2">
+                  <Label htmlFor="chooseTx">Επιλέξτε Οφειλή</Label>
+                  <Select
+                    value={currentTx?.id || ""}
+                    onValueChange={(id) => {
+                      const tx = pendingTxsForSelected.find((x) => x.id === id)
+                      if (tx) {
+                        setCurrentTx(tx)
+                        setPaymentAmount("")
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="chooseTx">
+                      <SelectValue placeholder="Επιλέξτε οφειλή" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {pendingTxsForSelected.map((tx) => {
+                        const remaining = (Number(tx.amount) || 0) - (Number(tx.amountPaid) || 0)
+                        return (
+                          <SelectItem key={tx.id} value={tx.id}>
+                            {tx.productName} — Υπόλοιπο €{remaining.toLocaleString()}
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div>
+                <p><strong>Προϊόν:</strong> {currentTx.productName}</p>
+                <p><strong>Σύνολο:</strong> €{(Number(currentTx.amount) || 0).toLocaleString()}</p>
+                <p><strong>Εξοφλημένο:</strong> €{(Number(currentTx.amountPaid) || 0).toLocaleString()}</p>
+                <p><strong>Υπόλοιπο:</strong> €{(Number(currentTx.amount) - Number(currentTx.amountPaid) || 0).toLocaleString()}</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="paymentAmount">Ποσό Είσπραξης</Label>
+                <Input
+                  id="paymentAmount"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  placeholder={`Μέχρι €${(
+                    (Number(currentTx.amount) || 0) - (Number(currentTx.amountPaid) || 0)
+                  ).toLocaleString()}`}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="paymentDate">Ημερομηνία</Label>
+                <Input id="paymentDate" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="paymentNotes">Σημειώσεις (προαιρετικά)</Label>
+                <Textarea id="paymentNotes" rows={3} value={paymentNotes} onChange={(e) => setPaymentNotes(e.target.value)} />
               </div>
             </div>
-          );
-        })()}
-      </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsPaymentDialogOpen(false)}>
+                {t.cancel}
+              </Button>
+              <Button type="submit">Καταχώριση Είσπραξης</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payments history (revenue ledger) */}
+      <CustomerPaymentHistory customerId={selectedCustomer?.id || undefined} refreshKey={historyRefresh} pageSize={10} />
     </div>
   )
 }

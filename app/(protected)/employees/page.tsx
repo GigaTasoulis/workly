@@ -324,6 +324,101 @@ export default function EmployeesPage() {
   const [workLogStatusFilter, setWorkLogStatusFilter] = useState<"all"|"paid"|"pending">("all");
   const [currentWorkLogPage, setCurrentWorkLogPage] = useState(1);
 
+  const [isGlobalPayOpen, setIsGlobalPayOpen] = useState(false);
+  const [selectedDebtId, setSelectedDebtId] = useState<string>("");
+  const [globalPaymentAmount, setGlobalPaymentAmount] = useState<string>("");
+
+  // Which employee scope are we showing in the bar? (selected card > table filter > all)
+  const scopedEmployee =
+    selectedEmployee ??
+    (selectedEmployeeFilter !== "all"
+      ? employees.find(e => e.id === selectedEmployeeFilter) ?? null
+      : null);
+
+  // Open (pending) logs in scope
+  const pendingLogs = useMemo(() => {
+    let logs = worklogs.filter(w => (w.totalAmount - w.amountPaid) > 0.000001);
+    if (scopedEmployee) logs = logs.filter(w => w.employeeId === scopedEmployee.id);
+    return logs.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [worklogs, scopedEmployee]);
+
+  const selectedDebt = useMemo(
+    () => pendingLogs.find(l => l.id === selectedDebtId),
+    [pendingLogs, selectedDebtId]
+  );
+
+  // Stats for the bar
+  const scopedPendingCount = pendingLogs.length;
+  const scopedOwed = Number(
+    pendingLogs.reduce((s, l) => s + Math.max(0, l.totalAmount - l.amountPaid), 0).toFixed(2)
+  );
+
+  function exportEmployeeWorklogsToCSV(rows: UIWorklog[], name = "worklogs") {
+    const header = ["employeeId","workplaceId","date","hoursWorked","totalAmount","amountPaid","notes"];
+    const body = rows.map(r => [
+      r.employeeId, r.workplaceId, r.date, r.hoursWorked, r.totalAmount, r.amountPaid,
+      (r.notes ?? "").replace(/\r?\n/g, " ")
+    ]);
+    const csv = [header, ...body].map(a => a.map(x => `"${String(x).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `${name}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+
+  function openGlobalPay() {
+    if (pendingLogs.length === 0) {
+      toast({ title: "Δεν υπάρχουν εκκρεμείς οφειλές", variant: "destructive" });
+      return;
+    }
+    setSelectedDebtId(pendingLogs[0].id);
+    setGlobalPaymentAmount("");
+    setIsGlobalPayOpen(true);
+  }
+
+  async function handleGlobalPaySubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const log = selectedDebt;
+    if (!log) return;
+
+    const remaining = Math.max(0, log.totalAmount - log.amountPaid);
+    const amount = parseFloat(globalPaymentAmount);
+
+    if (!Number.isFinite(amount) || amount <= 0 || amount > remaining) {
+      toast({ title: "Σφάλμα", description: `Μη έγκυρο ποσό (μέχρι €${remaining}).`, variant: "destructive" });
+      return;
+    }
+
+    const newPaid = Math.min(
+      log.totalAmount,
+      Number((log.amountPaid + amount).toFixed(2))
+    );
+
+    try {
+      // 1) Update the worklog's paid amount
+      await updateWorklogApi(log.id, { amountPaid: newPaid });
+
+      // 2) Record payment (your backend also bumps the txn)
+      await addPayrollPaymentForWorklog(log.id, amount, "Payroll payment");
+
+      // 3) Keep live transaction in sync
+      const emp = employees.find(e => e.id === log.employeeId) || undefined;
+      await upsertPayrollTxnFromWorklog({ ...log, amountPaid: newPaid }, emp);
+
+      // 4) Refresh UI
+      const fresh = await fetchWorklogs();
+      setWorklogs(fresh);
+      setIsGlobalPayOpen(false);
+      toast({ title: "Καταγράφηκε", description: `Πληρωμή ${formatEUR(amount)}.` });
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Σφάλμα", description: "Αποτυχία καταγραφής πληρωμής.", variant: "destructive" });
+    }
+  }
+
+
   const [workLogSortOrder, setWorkLogSortOrder] = useState<"desc" | "asc">("desc");
   const formatEUR = (v: number) =>
   new Intl.NumberFormat("el-GR", { style: "currency", currency: "EUR" }).format(v);
@@ -1174,6 +1269,72 @@ export default function EmployeesPage() {
           </form>
         </DialogContent>
       </Dialog>
+      <Dialog open={isGlobalPayOpen} onOpenChange={setIsGlobalPayOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Πληρωμή</DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleGlobalPaySubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label>Οφειλή</Label>
+                <Select
+                  value={selectedDebtId}
+                  onValueChange={(v) => setSelectedDebtId(v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Επιλογή οφειλής" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pendingLogs.map((l) => {
+                      const emp = employees.find(e => e.id === l.employeeId);
+                      const remaining = Math.max(0, l.totalAmount - l.amountPaid);
+                      return (
+                        <SelectItem key={l.id} value={l.id}>
+                          {(emp ? `${emp.firstName} ${emp.lastName}` : "—")}
+                          {" • "}{l.date}
+                          {" • Υπόλοιπο "}{formatEUR(remaining)}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="global-pay-amount">Ποσό πληρωμής (€)</Label>
+                <Input
+                  id="global-pay-amount"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  value={globalPaymentAmount}
+                  onChange={(e) => setGlobalPaymentAmount(e.target.value)}
+                  placeholder={
+                    selectedDebt
+                      ? `Μέγιστο ${formatEUR(Math.max(0, selectedDebt.totalAmount - selectedDebt.amountPaid))}`
+                      : "Ποσό"
+                  }
+                />
+                {!!selectedDebt && (
+                  <p className="text-xs text-muted-foreground">
+                    Υπόλοιπο: {formatEUR(Math.max(0, selectedDebt.totalAmount - selectedDebt.amountPaid))}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsGlobalPayOpen(false)}>
+                Ακύρωση
+              </Button>
+              <Button type="submit">Υποβολή Πληρωμής</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <div className="mt-8">
         <div className="space-y-2 mb-4">
           {/* keep your original title + button */}
@@ -1187,47 +1348,45 @@ export default function EmployeesPage() {
             <div className="text-sm text-muted-foreground">
               Ενέργειες για:{" "}
               <span className="font-medium text-foreground">
-                {actionEmployee ? `${actionEmployee.firstName} ${actionEmployee.lastName}` : "—"}
+                {scopedEmployee ? `${scopedEmployee.firstName} ${scopedEmployee.lastName}` : "Όλους"}
               </span>
             </div>
 
             <div className="text-sm text-muted-foreground">
               Εκκρεμείς συναλλαγές:{" "}
-              <span className="font-medium">{actionEmployee ? actionPendingCount : 0}</span>{" "}
-              • Υπόλοιπο:{" "}
-              <span className="font-medium text-foreground">
-                {formatEUR(actionEmployee ? actionBalance : 0)}
-              </span>
+              <span className="font-medium">{scopedPendingCount}</span> • Υπόλοιπο:{" "}
+              <span className="font-medium text-foreground">{formatEUR(scopedOwed)}</span>
             </div>
 
             <div className="flex gap-2 w-full sm:w-auto">
               <Button
-                variant="secondary"
                 className="w-full sm:w-auto"
+                variant="secondary"
                 onClick={handleAddWorkLogGlobal}
-                disabled={!actionEmployee}
               >
-                Προσθήκη Οφειλής
+                Προσθήκη Ωρών
               </Button>
 
               <Button
                 className="w-full sm:w-auto"
-                onClick={() => actionEmployee && handleQuickPayFor(actionEmployee.id)}
-                disabled={!actionEmployee || actionPendingCount === 0}
+                onClick={openGlobalPay}
+                disabled={pendingLogs.length === 0}
               >
                 Πληρωμή
               </Button>
 
               <Button
                 variant="outline"
-                className="w-full sm:w-auto"
-                onClick={() => actionEmployee && exportEmployeeCSV(actionEmployee.id)}
-                disabled={!actionEmployee}
+                onClick={() => exportEmployeeWorklogsToCSV(
+                  scopedEmployee ? worklogs.filter(w => w.employeeId === scopedEmployee.id) : worklogs,
+                  scopedEmployee ? `${scopedEmployee.firstName}-${scopedEmployee.lastName}` : "all-employees"
+                )}
               >
                 Εξαγωγή CSV
               </Button>
             </div>
           </div>
+
         </div>
 
         <div className="flex gap-4 mb-4">

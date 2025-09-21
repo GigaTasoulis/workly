@@ -41,7 +41,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
       {user && <Sidebar isOpen={sidebarOpen} onOpenChange={setSidebarOpen} />}
 
-      <div className="flex-1 flex flex-col min-w-0 min-[1100px]:pl-64">
+      <div className="flex-1 flex flex-col min-w-0">
         {user && <MobileTopBar onMenu={() => setSidebarOpen(true)} />}
         <main className="flex-1 overflow-y-auto p-4 min-[1100px]:p-6">
           {children}

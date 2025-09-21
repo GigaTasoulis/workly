@@ -71,6 +71,64 @@ type ApiWorklog = {
   created_at: string;
 };
 
+// ---- NEW: Finance helpers for expenses + live transactions ----
+type UpsertPayrollTxnPayload = {
+  kind: "payroll";
+  worklog_id: string;       // unique key to tie txn to this worklog
+  employee_id: string;
+  title: string;            // e.g. "First Last – 2025-09-19"
+  date: string;             // worklog date
+  total: number;
+  paid: number;
+  remaining: number;
+  status: "active" | "closed";
+};
+
+// ---- NEW helpers that match your backend ----
+async function upsertPayrollTxnFromWorklog(w: UIWorklog, employee?: UIEmployee) {
+  const body = {
+    upsert: true,
+    employee_id: w.employeeId,
+    worklog_id: w.id,
+    amount: Number(w.totalAmount || 0),
+    amount_paid: Number(w.amountPaid || 0),
+    date: w.date,
+    status: (Number(w.amountPaid || 0) >= Number(w.totalAmount || 0)) ? "paid" : "pending",
+    notes: employee ? `${employee.firstName} ${employee.lastName} – ${w.date}` : null,
+  };
+  const r = await fetch(`/api/payroll-transactions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) console.warn("upsertPayrollTxnFromWorklog failed:", await r.text());
+}
+
+async function addPayrollPaymentForWorklog(worklogId: string, amount: number, note?: string) {
+  const r = await fetch(`/api/payroll-payments`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      worklog_id: worklogId,
+      amount: Number(amount || 0),
+      note: note || "Payroll payment",
+      // date omitted -> backend uses today
+    }),
+  });
+  if (!r.ok) console.warn("addPayrollPaymentForWorklog failed:", await r.text());
+}
+
+async function deletePayrollTxnByWorklog(worklogId: string) {
+  await fetch(`/api/payroll-transactions?worklog_id=${encodeURIComponent(worklogId)}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+}
+
+
+
 // ---------------- Mapping helpers ----------------
 function apiEmpToUi(e: ApiEmployee): UIEmployee {
   return {
@@ -267,8 +325,88 @@ export default function EmployeesPage() {
   const [currentWorkLogPage, setCurrentWorkLogPage] = useState(1);
 
   const [workLogSortOrder, setWorkLogSortOrder] = useState<"desc" | "asc">("desc");
+  const formatEUR = (v: number) =>
+  new Intl.NumberFormat("el-GR", { style: "currency", currency: "EUR" }).format(v);
 
 
+  // Which employee should the action bar target?
+  const actionEmployee = useMemo(() => {
+    // prefer the explicitly selected card on the right;
+    // otherwise use the filter dropdown if it's not "all"
+    return (
+      selectedEmployee ??
+      (selectedEmployeeFilter !== "all"
+        ? employees.find((e) => e.id === selectedEmployeeFilter) ?? null
+        : null)
+    );
+  }, [selectedEmployee, selectedEmployeeFilter, employees]);
+
+  // Pending count + balance for that employee
+  const actionPendingCount = useMemo(() => {
+    if (!actionEmployee) return 0;
+    return worklogs.filter(
+      (l) => l.employeeId === actionEmployee.id && (l.amountPaid || 0) < (l.totalAmount || 0)
+    ).length;
+  }, [actionEmployee, worklogs]);
+
+  const actionBalance = useMemo(() => {
+    if (!actionEmployee) return 0;
+    return worklogs
+      .filter((l) => l.employeeId === actionEmployee.id)
+      .reduce((sum, l) => sum + Math.max(0, (l.totalAmount || 0) - (l.amountPaid || 0)), 0);
+  }, [actionEmployee, worklogs]);
+
+  // Quick-pay the oldest pending worklog for that employee
+  const handleQuickPayFor = (employeeId: string) => {
+    const pending = worklogs
+      .filter((l) => l.employeeId === employeeId && (l.amountPaid || 0) < (l.totalAmount || 0))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    if (pending.length === 0) return;
+    handleOpenPayDialog(pending[0]);
+  };
+
+  // Export that employee's logs to CSV
+  const exportEmployeeCSV = (employeeId: string) => {
+    const rows = worklogs
+      .filter((l) => l.employeeId === employeeId)
+      .map((l) => ({
+        date: l.date,
+        workplace: getWorkplaceName(l.workplaceId),
+        hoursWorked: l.hoursWorked,
+        totalAmount: l.totalAmount,
+        amountPaid: l.amountPaid,
+        remaining: Math.max(0, (l.totalAmount || 0) - (l.amountPaid || 0)),
+        notes: l.notes || "",
+      }));
+
+    const headers = ["Ημερομηνία","Χώρος Εργασίας","Ώρες","Σύνολο (€)","Πληρωμένο (€)","Υπόλοιπο (€)","Σημειώσεις"];
+    const csv = [
+      headers.join(","),
+      ...rows.map(r =>
+        [
+          r.date,
+          `"${(r.workplace || "").replace(/"/g, '""')}"`,
+          r.hoursWorked,
+          r.totalAmount,
+          r.amountPaid,
+          r.remaining,
+          `"${(r.notes || "").replace(/"/g, '""')}"`,
+        ].join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const emp = employees.find((e) => e.id === employeeId);
+    const name = emp ? `${emp.firstName}-${emp.lastName}` : "employee";
+    a.download = `worklogs-${name}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   // Columns for the DataTable
   const columns = [
@@ -334,16 +472,17 @@ export default function EmployeesPage() {
     };
   
   const filteredLogs = useMemo(() => {
-    let logs = worklogs; // <- this is the API-backed worklogs array already in the page
+    let logs = worklogs;
     if (selectedEmployeeFilter !== "all") logs = logs.filter(l => l.employeeId === selectedEmployeeFilter);
     if (workLogStatusFilter === "paid")    logs = logs.filter(l => l.amountPaid >= l.totalAmount);
     if (workLogStatusFilter === "pending") logs = logs.filter(l => l.amountPaid < l.totalAmount);
     return logs.slice().sort((a,b) =>
-      empSortOrder === "desc"
+      workLogSortOrder === "desc" // <-- was empSortOrder
         ? new Date(b.date).getTime() - new Date(a.date).getTime()
         : new Date(a.date).getTime() - new Date(b.date).getTime()
     );
-  }, [worklogs, selectedEmployeeFilter, workLogStatusFilter, empSortOrder]);
+  }, [worklogs, selectedEmployeeFilter, workLogStatusFilter, workLogSortOrder]);
+
   
   const paginatedWorkLogs = useMemo(() => {
     const start = (currentWorkLogPage - 1) * workLogsPerPage;
@@ -449,41 +588,51 @@ export default function EmployeesPage() {
   };
 
   const handleDeleteWorkLog = async (id: string) => {
-    if (!confirm("Να διαγραφεί αυτή η καταγραφή;")) return;
-    try {
-      await deleteWorklogApi(id);
-      const fresh = await fetchWorklogs();
-      setWorklogs(fresh);
-      toast({ title: "Διαγράφηκε", description: "Η καταγραφή διαγράφηκε." });
-    } catch (e) {
-      console.error(e);
-      toast({ title: "Σφάλμα", description: "Αποτυχία διαγραφής καταγραφής.", variant: "destructive" });
-    }
-  };
+  if (!confirm("Να διαγραφεί αυτή η καταγραφή;")) return;
+  try {
+    await deleteWorklogApi(id);
+    // NEW: clean up the associated transaction
+    await deletePayrollTxnByWorklog(id);
+
+    const fresh = await fetchWorklogs();
+    setWorklogs(fresh);
+    toast({ title: "Διαγράφηκε", description: "Η καταγραφή διαγράφηκε." });
+  } catch (e) {
+    console.error(e);
+    toast({ title: "Σφάλμα", description: "Αποτυχία διαγραφής καταγραφής.", variant: "destructive" });
+  }
+};
 
   const handleWorkLogSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const w = currentWorkLog;
-    if (!w.employeeId || !w.workplaceId || !w.date) {
-      toast({ title: "Σφάλμα", description: "Υπάλληλος, Χώρος εργασίας και Ημ/νία απαιτούνται.", variant: "destructive" });
-      return;
+  e.preventDefault();
+  const w = currentWorkLog;
+  if (!w.employeeId || !w.workplaceId || !w.date) {
+    toast({ title: "Σφάλμα", description: "Υπάλληλος, Χώρος εργασίας και Ημ/νία απαιτούνται.", variant: "destructive" });
+    return;
+  }
+  try {
+    if (isEditingWorkLog && w.id) {
+      await updateWorklogApi(w.id, w);
+      toast({ title: "Ενημερώθηκε", description: "Η καταγραφή ενημερώθηκε." });
+      // NEW: make sure the live transaction reflects the new totals
+      const emp = employees.find(e => e.id === w.employeeId) || undefined;
+      await upsertPayrollTxnFromWorklog(w, emp);
+    } else {
+      const newId = await createWorklogApi(w);
+      toast({ title: "Προστέθηκε", description: "Η καταγραφή προστέθηκε." });
+      // NEW: create live transaction for this new worklog
+      const newLog: UIWorklog = { ...w, id: newId, amountPaid: Number(w.amountPaid || 0), totalAmount: Number(w.totalAmount || 0) };
+      const emp = employees.find(e => e.id === newLog.employeeId) || undefined;
+      await upsertPayrollTxnFromWorklog(newLog, emp);
     }
-    try {
-      if (isEditingWorkLog && w.id) {
-        await updateWorklogApi(w.id, w);
-        toast({ title: "Ενημερώθηκε", description: "Η καταγραφή ενημερώθηκε." });
-      } else {
-        await createWorklogApi(w);
-        toast({ title: "Προστέθηκε", description: "Η καταγραφή προστέθηκε." });
-      }
-      const fresh = await fetchWorklogs();
-      setWorklogs(fresh);
-      setIsWorkLogDialogOpen(false);
-    } catch (e) {
-      console.error(e);
-      toast({ title: "Σφάλμα", description: "Αποτυχία αποθήκευσης καταγραφής.", variant: "destructive" });
-    }
-  };
+    const fresh = await fetchWorklogs();
+    setWorklogs(fresh);
+    setIsWorkLogDialogOpen(false);
+  } catch (e) {
+    console.error(e);
+    toast({ title: "Σφάλμα", description: "Αποτυχία αποθήκευσης καταγραφής.", variant: "destructive" });
+  }
+};
 
   // simple “pay” flow: add amount to amountPaid
   const [isPayDialogOpen, setIsPayDialogOpen] = useState(false);
@@ -511,20 +660,28 @@ export default function EmployeesPage() {
   const handlePaySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!workLogToPay) return;
-    
+
     const remaining = workLogToPay.totalAmount - workLogToPay.amountPaid;
     const payment = parseFloat(paymentAmount);
     if (!Number.isFinite(payment) || payment <= 0 || payment > remaining) {
       toast({ title: "Σφάλμα", description: `Μη έγκυρο ποσό (μέχρι €${remaining}).`, variant: "destructive" });
       return;
     }
-    const newPaid = Math.min(
-      workLogToPay.totalAmount,
-      Number((workLogToPay.amountPaid + payment).toFixed(2))
-    );
-    
+    const newPaid = Math.min(workLogToPay.totalAmount, Number((workLogToPay.amountPaid + payment).toFixed(2)));
+
     try {
+      // Update worklog paid amount
       await updateWorklogApi(workLogToPay.id, { amountPaid: newPaid });
+
+      // NEW: record payroll payment (also bumps amount_paid on the txn)
+      await addPayrollPaymentForWorklog(workLogToPay.id, payment, "Payroll payment");
+
+
+      // NEW: update the live transaction (active -> closed if fully paid)
+      const updatedLog: UIWorklog = { ...workLogToPay, amountPaid: newPaid };
+      const emp = employees.find(e => e.id === updatedLog.employeeId) || undefined;
+      await upsertPayrollTxnFromWorklog(updatedLog, emp);
+
       const fresh = await fetchWorklogs();
       setWorklogs(fresh);
       setIsPayDialogOpen(false);
@@ -657,10 +814,13 @@ export default function EmployeesPage() {
 
                   <TabsContent value="history" className="space-y-4 pt-4">
                     <div className="flex gap-4 mb-4">
-                      <Select
-                        value={empSortOrder}
-                        onValueChange={(v: "asc" | "desc") => { setEmpSortOrder(v); setEmpPage(1); }}
-                      >
+                        <Select
+                          value={workLogSortOrder}
+                          onValueChange={(value) => {
+                            setWorkLogSortOrder(value as "desc" | "asc");
+                            setCurrentWorkLogPage(1);
+                          }}
+                        >
                         <SelectTrigger>
                           <SelectValue placeholder="Ταξινόμηση" />
                         </SelectTrigger>
@@ -1015,10 +1175,61 @@ export default function EmployeesPage() {
         </DialogContent>
       </Dialog>
       <div className="mt-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold tracking-tight">Καταγραφή Εργασίας</h2>
-          <Button onClick={handleAddWorkLogGlobal}>Προσθήκη Ωρών</Button>
+        <div className="space-y-2 mb-4">
+          {/* keep your original title + button */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold tracking-tight">Καταγραφή Εργασίας</h2>
+            <Button onClick={handleAddWorkLogGlobal}>Προσθήκη Ωρών</Button>
+          </div>
+
+          {/* action bar */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="text-sm text-muted-foreground">
+              Ενέργειες για:{" "}
+              <span className="font-medium text-foreground">
+                {actionEmployee ? `${actionEmployee.firstName} ${actionEmployee.lastName}` : "—"}
+              </span>
+            </div>
+
+            <div className="text-sm text-muted-foreground">
+              Εκκρεμείς συναλλαγές:{" "}
+              <span className="font-medium">{actionEmployee ? actionPendingCount : 0}</span>{" "}
+              • Υπόλοιπο:{" "}
+              <span className="font-medium text-foreground">
+                {formatEUR(actionEmployee ? actionBalance : 0)}
+              </span>
+            </div>
+
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={handleAddWorkLogGlobal}
+                disabled={!actionEmployee}
+              >
+                Προσθήκη Οφειλής
+              </Button>
+
+              <Button
+                className="w-full sm:w-auto"
+                onClick={() => actionEmployee && handleQuickPayFor(actionEmployee.id)}
+                disabled={!actionEmployee || actionPendingCount === 0}
+              >
+                Πληρωμή
+              </Button>
+
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => actionEmployee && exportEmployeeCSV(actionEmployee.id)}
+                disabled={!actionEmployee}
+              >
+                Εξαγωγή CSV
+              </Button>
+            </div>
+          </div>
         </div>
+
         <div className="flex gap-4 mb-4">
           <Select
             value={selectedEmployeeFilter}
@@ -1056,7 +1267,7 @@ export default function EmployeesPage() {
             </SelectContent>
           </Select>
           <Select
-            value={empSortOrder}
+            value={workLogSortOrder}
             onValueChange={(value) => {
               setWorkLogSortOrder(value as "desc" | "asc");
               setCurrentWorkLogPage(1);

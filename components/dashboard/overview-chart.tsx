@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import { translations as t } from "@/lib/translations"
-import { getLocalData } from "@/lib/utils"
+import { useEffect, useState } from "react";
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { translations as t } from "@/lib/translations";
+import { getLocalData } from "@/lib/utils";
 
 // Define interfaces matching your transactions (adjust if necessary)
 interface Transaction {
@@ -29,42 +29,55 @@ interface SupplierTransaction {
 }
 
 export function OverviewChart() {
-  const [mounted, setMounted] = useState(false)
-  const [chartData, setChartData] = useState<any[]>([])
+  const [mounted, setMounted] = useState(false);
+  const [chartData, setChartData] = useState<any[]>([]);
 
   useEffect(() => {
-    setMounted(true)
-    setChartData(computeDashboardData())
-  }, [])
+    setMounted(true);
+    setChartData(computeDashboardData());
+  }, []);
 
   // Aggregation function: sums customer revenue and supplier expenses by month
   const computeDashboardData = () => {
-    const monthKeys = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+    const monthKeys = [
+      "jan",
+      "feb",
+      "mar",
+      "apr",
+      "may",
+      "jun",
+      "jul",
+      "aug",
+      "sep",
+      "oct",
+      "nov",
+      "dec",
+    ];
     const monthsData = monthKeys.map((key) => ({
       name: t.months[key as keyof typeof t.months],
       revenue: 0,
       expenses: 0,
-    }))
+    }));
 
     // Get customer transactions from local storage
-    const customerTransactions: Transaction[] = getLocalData("transactions") || []
+    const customerTransactions: Transaction[] = getLocalData("transactions") || [];
     customerTransactions.forEach((tr) => {
-      const monthIndex = new Date(tr.date).getMonth()
-      monthsData[monthIndex].revenue += tr.amountPaid
-    })
+      const monthIndex = new Date(tr.date).getMonth();
+      monthsData[monthIndex].revenue += tr.amountPaid;
+    });
 
     // Get supplier transactions from local storage
-    const supplierTransactions: SupplierTransaction[] = getLocalData("supplierTransactions") || []
+    const supplierTransactions: SupplierTransaction[] = getLocalData("supplierTransactions") || [];
     supplierTransactions.forEach((tr) => {
-      const monthIndex = new Date(tr.date).getMonth()
-      monthsData[monthIndex].expenses += tr.amountPaid
-    })
+      const monthIndex = new Date(tr.date).getMonth();
+      monthsData[monthIndex].expenses += tr.amountPaid;
+    });
 
-    return monthsData
-  }
+    return monthsData;
+  };
 
   if (!mounted) {
-    return <div className="h-[300px] flex items-center justify-center">Loading chart...</div>
+    return <div className="flex h-[300px] items-center justify-center">Loading chart...</div>;
   }
 
   return (
@@ -83,5 +96,5 @@ export function OverviewChart() {
         <Bar dataKey="expenses" fill="hsl(var(--muted))" radius={[4, 4, 0, 0]} name={t.expenses} />
       </BarChart>
     </ResponsiveContainer>
-  )
+  );
 }

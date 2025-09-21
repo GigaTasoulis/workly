@@ -15,85 +15,93 @@ export async function onRequest({ request, env, params }: any) {
       h["access-control-allow-credentials"] = "true";
       h["vary"] = "Origin";
       h["access-control-allow-headers"] = "content-type";
-      h["access-control-allow-methods"] = "GET,PUT,DELETE,OPTIONS";
+      h["access-control-allow-methods"] = "PUT,DELETE,OPTIONS";
     }
     return h;
   };
-
   if (method === "OPTIONS") return new Response(null, { status: 204, headers: cors() });
   if (!id) return json({ error: "Missing id" }, 400, cors());
 
   const user = await getUserFromSession(env, request);
   if (!user) return json({ error: "Unauthorized" }, 401, cors());
 
-  if (method === "GET") {
-    const row = await env.DB.prepare(
-      `SELECT id, customer_id, product_name, amount, amount_paid, date, status, notes, created_at
-           FROM customer_transactions
-          WHERE user_id = ? AND id = ?`,
-    )
-      .bind(user.user_id, id)
-      .first();
-    if (!row) return json({ error: "Not found" }, 404, cors());
-    return json({ transaction: row }, 200, cors());
-  }
+  const n = (x: any) => Number(x ?? 0) || 0;
 
   if (method === "PUT") {
-    const exists = await env.DB.prepare(
-      `SELECT 1 FROM customer_transactions WHERE user_id = ? AND id = ?`,
+    const b = await safeJson(request);
+
+    const existing = await env.DB.prepare(
+      `SELECT id, amount, amount_paid FROM payroll_transactions WHERE user_id = ? AND id = ?`,
     )
       .bind(user.user_id, id)
       .first();
-    if (!exists) return json({ error: "Not found" }, 404, cors());
+    if (!existing) return json({ error: "Not found" }, 404, cors());
 
-    const b = await safeJson(request);
     const sets: string[] = [];
     const vals: any[] = [];
 
-    if (b?.customer_id !== undefined) {
-      sets.push("customer_id = ?");
-      vals.push(String(b.customer_id).trim());
+    if (b?.employee_id !== undefined || b?.employeeId !== undefined) {
+      sets.push("employee_id = ?");
+      vals.push(String(b.employee_id ?? b.employeeId).trim());
     }
-    if (b?.product_name !== undefined) {
-      sets.push("product_name = ?");
-      vals.push(String(b.product_name).trim());
+    if (b?.worklog_id !== undefined || b?.worklogId !== undefined) {
+      sets.push("worklog_id = ?");
+      vals.push(String(b.worklog_id ?? b.worklogId).trim());
     }
     if (b?.amount !== undefined) {
       sets.push("amount = ?");
-      vals.push(Number(b.amount) || 0);
+      vals.push(n(b.amount));
     }
-    if (b?.amount_paid !== undefined) {
+    if (b?.amount_paid !== undefined || b?.amountPaid !== undefined) {
       sets.push("amount_paid = ?");
-      vals.push(Number(b.amount_paid) || 0);
+      vals.push(n(b.amount_paid ?? b.amountPaid));
     }
     if (b?.date !== undefined) {
+      const d = String(b.date).trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d))
+        return json({ error: "date must be YYYY-MM-DD" }, 400, cors());
       sets.push("date = ?");
-      vals.push(String(b.date).trim() || null);
+      vals.push(d);
     }
     if (b?.status !== undefined) {
+      const st = String(b.status).trim();
+      if (!["pending", "paid", "cancelled"].includes(st))
+        return json({ error: "Invalid status" }, 400, cors());
       sets.push("status = ?");
-      vals.push(String(b.status).trim());
+      vals.push(st);
     }
     if (b?.notes !== undefined) {
       sets.push("notes = ?");
-      vals.push((b.notes ?? "").toString().trim().slice(0, 2000) || null);
+      vals.push(String(b.notes).trim().slice(0, 2000));
+    }
+
+    // auto-status if not supplied but amounts changed
+    const newAmount = "amount" in b ? n(b.amount) : existing.amount;
+    const newPaid =
+      "amount_paid" in b || "amountPaid" in b
+        ? n(b.amount_paid ?? b.amountPaid)
+        : existing.amount_paid;
+    if (!("status" in b) && Number.isFinite(newAmount) && Number.isFinite(newPaid)) {
+      sets.push("status = ?");
+      vals.push(newPaid >= newAmount ? "paid" : "pending");
     }
 
     if (sets.length === 0) return json({ error: "No fields to update" }, 400, cors());
+    sets.push("updated_at = strftime('%s','now')");
 
     vals.push(user.user_id, id);
-    await env.DB.prepare(
-      `UPDATE customer_transactions SET ${sets.join(", ")} WHERE user_id = ? AND id = ?`,
+    const res = await env.DB.prepare(
+      `UPDATE payroll_transactions SET ${sets.join(", ")} WHERE user_id = ? AND id = ?`,
     )
       .bind(...vals)
       .run();
-
+    if (!res.meta || res.meta.changes === 0) return json({ error: "Not found" }, 404, cors());
     return json({ ok: true }, 200, cors());
   }
 
   if (method === "DELETE") {
     const res = await env.DB.prepare(
-      `DELETE FROM customer_transactions WHERE user_id = ? AND id = ?`,
+      `DELETE FROM payroll_transactions WHERE user_id = ? AND id = ?`,
     )
       .bind(user.user_id, id)
       .run();
@@ -122,7 +130,7 @@ async function getUserFromSession(env: any, request: Request) {
   return await env.DB.prepare(
     `SELECT u.id AS user_id, u.username
        FROM auth_sessions s JOIN auth_users u ON u.id = s.user_id
-       WHERE s.id = ? AND s.expires_at > ?`,
+      WHERE s.id = ? AND s.expires_at > ?`,
   )
     .bind(sid, now)
     .first();

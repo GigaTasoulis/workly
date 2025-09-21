@@ -17,7 +17,13 @@ function corsHeaders(origin: string | null) {
 function cookieHeader(
   name: string,
   value: string,
-  opts: { path?: string; maxAge?: number; httpOnly?: boolean; secure?: boolean; sameSite?: "Lax"|"Strict"|"None" } = {}
+  opts: {
+    path?: string;
+    maxAge?: number;
+    httpOnly?: boolean;
+    secure?: boolean;
+    sameSite?: "Lax" | "Strict" | "None";
+  } = {},
 ) {
   const parts = [`${name}=${value}`];
   parts.push(`Path=${opts.path ?? "/"}`);
@@ -30,10 +36,14 @@ function cookieHeader(
 
 function parseCookies(req: Request) {
   const header = req.headers.get("Cookie") || "";
-  const pairs = header.split(/;\s*/).filter(Boolean).map(kv => {
-    const i = kv.indexOf("="); return [decodeURIComponent(kv.slice(0,i)), decodeURIComponent(kv.slice(i+1))];
-  });
-  return Object.fromEntries(pairs) as Record<string,string>;
+  const pairs = header
+    .split(/;\s*/)
+    .filter(Boolean)
+    .map((kv) => {
+      const i = kv.indexOf("=");
+      return [decodeURIComponent(kv.slice(0, i)), decodeURIComponent(kv.slice(i + 1))];
+    });
+  return Object.fromEntries(pairs) as Record<string, string>;
 }
 
 export async function onRequest(context: any) {
@@ -53,7 +63,8 @@ export async function onRequest(context: any) {
 
   if (request.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405, headers: corsHeaders(origin),
+      status: 405,
+      headers: corsHeaders(origin),
     });
   }
 
@@ -64,13 +75,16 @@ export async function onRequest(context: any) {
   }
 
   const h = corsHeaders(origin);
-  h.set("Set-Cookie", cookieHeader("session", "", {
-    path: "/",
-    maxAge: 0,
-    httpOnly: true,
-    secure: isHttps,
-    sameSite: "Lax",
-  }));
+  h.set(
+    "Set-Cookie",
+    cookieHeader("session", "", {
+      path: "/",
+      maxAge: 0,
+      httpOnly: true,
+      secure: isHttps,
+      sameSite: "Lax",
+    }),
+  );
   h.set("Content-Type", "application/json");
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: h });
 }

@@ -40,14 +40,14 @@ cd workly
 ```
 
 2. Install Dependencies
-Install all required dependencies using the legacy-peer-deps flag (to bypass dependency conflicts):
+   Install all required dependencies using the legacy-peer-deps flag (to bypass dependency conflicts):
 
-```npm install --legacy-peer-deps```
+`npm install --legacy-peer-deps`
 
 3. Configure Next.js for Static Export
-Ensure your next.config.mjs is configured to export static files. An example configuration is:
+   Ensure your next.config.mjs is configured to export static files. An example configuration is:
 
-``` 
+```
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'export',
@@ -62,13 +62,13 @@ export default nextConfig;
 ```
 
 4. Build the Static Export
-Generate your static files in the out folder by running:
-``` npm run build``` 
+   Generate your static files in the out folder by running:
+   ` npm run build`
 
 5. Package the Electron App
-Make sure your package.json contains the necessary scripts and build configuration. An example section in package.json is:
+   Make sure your package.json contains the necessary scripts and build configuration. An example section in package.json is:
 
-``` {
+```{
   "name": "my-v0-project",
   "version": "0.1.0",
   "main": "main.js",
@@ -101,13 +101,13 @@ Make sure your package.json contains the necessary scripts and build configurati
     }
   }
 }
-``` 
+```
 
 Then package your app by running:
-```npm run build:electron``` 
+`npm run build:electron`
 
 6. Run the Packaged Application
-After packaging, run the installer or launch the app directly from the dist folder to verify everything works correctly.
+   After packaging, run the installer or launch the app directly from the dist folder to verify everything works correctly.
 
 Development
 For development, you can run the Next.js dev server and Electron separately:
@@ -121,6 +121,7 @@ npm run dev
 Launch Electron:
 
 Open another terminal window and run:
+
 ```
 npx electron .
 ```
@@ -130,7 +131,4 @@ This project is licensed under the MIT License.
 
 Contact
 For support or questions, please contact me at tasgiannak2001@gmail.com
-```This file uses proper Markdown formatting with headings, code blocks, and bullet lists to make it easy to follow. Adjust any paths, commands, or descriptions to match your project's specifics. Let me know if you need any further changes!``` 
-
-
-
+`This file uses proper Markdown formatting with headings, code blocks, and bullet lists to make it easy to follow. Adjust any paths, commands, or descriptions to match your project's specifics. Let me know if you need any further changes!`

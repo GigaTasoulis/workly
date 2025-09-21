@@ -1,0 +1,25 @@
+# deps & build output
+node_modules
+.next
+out
+dist
+build
+coverage
+
+# tooling caches & misc
+*.log
+*.lock
+package-lock.json
+
+# images, exported stuff
+public
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.gif
+**/*.svg
+
+# keep DB/CF artifacts out if any
+wrangler.toml
+.workers
+functions/generated

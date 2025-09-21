@@ -27,7 +27,9 @@ export async function onRequest({ request, env }: any) {
   // Pick whichever table exists
   const txTable = (await hasTable(env, "customer_transactions"))
     ? "customer_transactions"
-    : (await hasTable(env, "transactions")) ? "transactions" : null;
+    : (await hasTable(env, "transactions"))
+      ? "transactions"
+      : null;
 
   if (method === "GET") {
     // If no tx table exists yet, just return customers with debt=0
@@ -36,8 +38,10 @@ export async function onRequest({ request, env }: any) {
         `SELECT id, name, contact_person, email, phone, address, afm, tractor, notes, created_at
            FROM customers
           WHERE user_id = ?
-          ORDER BY created_at DESC`
-      ).bind(user.user_id).all();
+          ORDER BY created_at DESC`,
+      )
+        .bind(user.user_id)
+        .all();
       const customers = (rows.results ?? []).map((r: any) => ({ ...r, debt: 0 }));
       return json({ customers }, 200, cors());
     }
@@ -55,8 +59,10 @@ export async function onRequest({ request, env }: any) {
           ), 0) AS debt
          FROM customers c
         WHERE c.user_id = ?
-        ORDER BY c.created_at DESC`
-    ).bind(user.user_id).all();
+        ORDER BY c.created_at DESC`,
+    )
+      .bind(user.user_id)
+      .all();
 
     return json({ customers: rows.results ?? [] }, 200, cors());
   }
@@ -68,45 +74,75 @@ export async function onRequest({ request, env }: any) {
 
     const id = crypto.randomUUID().replace(/-/g, "");
     const contact_person = String(b?.contact_person ?? "").trim();
-    const email          = String(b?.email ?? "").trim();
-    const phone          = String(b?.phone ?? "").trim();
-    const address        = String(b?.address ?? "").trim();
-    const afm            = String(b?.afm ?? "").trim();
-    const tractor        = String(b?.tractor ?? "").trim();
-    const notes          = String(b?.notes ?? "").trim().slice(0, 2000);
+    const email = String(b?.email ?? "").trim();
+    const phone = String(b?.phone ?? "").trim();
+    const address = String(b?.address ?? "").trim();
+    const afm = String(b?.afm ?? "").trim();
+    const tractor = String(b?.tractor ?? "").trim();
+    const notes = String(b?.notes ?? "")
+      .trim()
+      .slice(0, 2000);
 
     // owner_id detection preserved (if you had it earlier)
-    const hasOwnerId = await env.DB
-      .prepare("SELECT 1 AS ok FROM pragma_table_info('customers') WHERE name='owner_id' LIMIT 1;")
-      .first();
+    const hasOwnerId = await env.DB.prepare(
+      "SELECT 1 AS ok FROM pragma_table_info('customers') WHERE name='owner_id' LIMIT 1;",
+    ).first();
 
     if (hasOwnerId?.ok) {
       await env.DB.prepare(
         `INSERT INTO customers
            (id, user_id, owner_id, name, contact_person, email, phone, address, afm, tractor, notes)
-         VALUES (?,  ?,      ?,        ?,    ?,              ?,    ?,     ?,       ?,   ?,       ?)`
-      ).bind(id, user.user_id, user.user_id, name, contact_person, email, phone, address, afm, tractor, notes).run();
+         VALUES (?,  ?,      ?,        ?,    ?,              ?,    ?,     ?,       ?,   ?,       ?)`,
+      )
+        .bind(
+          id,
+          user.user_id,
+          user.user_id,
+          name,
+          contact_person,
+          email,
+          phone,
+          address,
+          afm,
+          tractor,
+          notes,
+        )
+        .run();
     } else {
       await env.DB.prepare(
         `INSERT INTO customers
            (id, user_id, name, contact_person, email, phone, address, afm, tractor, notes)
-         VALUES (?,  ?,      ?,    ?,              ?,    ?,     ?,       ?,   ?,       ?)`
-      ).bind(id, user.user_id, name, contact_person, email, phone, address, afm, tractor, notes).run();
+         VALUES (?,  ?,      ?,    ?,              ?,    ?,     ?,       ?,   ?,       ?)`,
+      )
+        .bind(id, user.user_id, name, contact_person, email, phone, address, afm, tractor, notes)
+        .run();
     }
 
-    return json({ customer: { id, name, contact_person, email, phone, address, afm, tractor, notes } }, 201, cors());
+    return json(
+      { customer: { id, name, contact_person, email, phone, address, afm, tractor, notes } },
+      201,
+      cors(),
+    );
   }
 
   return json({ error: "Method not allowed" }, 405, cors());
 }
 
 /* helpers */
-function json(data: any, status = 200, headers?: Record<string,string>) {
+function json(data: any, status = 200, headers?: Record<string, string>) {
   return new Response(JSON.stringify(data), { status, headers });
 }
-async function safeJson(req: Request) { try { return await req.json(); } catch { return null; } }
+async function safeJson(req: Request) {
+  try {
+    return await req.json();
+  } catch {
+    return null;
+  }
+}
 async function hasTable(env: any, name: string) {
-  const r = await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").bind(name).first();
+  const r = await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?")
+    .bind(name)
+    .first();
   return !!r;
 }
 async function getUserFromSession(env: any, request: Request) {
@@ -117,6 +153,8 @@ async function getUserFromSession(env: any, request: Request) {
   return await env.DB.prepare(
     `SELECT u.id AS user_id, u.username
        FROM auth_sessions s JOIN auth_users u ON u.id = s.user_id
-      WHERE s.id = ? AND s.expires_at > ?`
-  ).bind(sid, now).first();
+      WHERE s.id = ? AND s.expires_at > ?`,
+  )
+    .bind(sid, now)
+    .first();
 }

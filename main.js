@@ -1,12 +1,12 @@
-const { app, BrowserWindow } = require('electron');
-const path = require('path');
-const express = require('express');
+const { app, BrowserWindow } = require("electron");
+const path = require("path");
+const express = require("express");
 
 const PORT = 3001; // Port for our local HTTP server
 
 // Create an Express app to serve static files from the "out" folder
 const expressApp = express();
-expressApp.use(express.static(path.join(__dirname, 'out')));
+expressApp.use(express.static(path.join(__dirname, "out")));
 expressApp.listen(PORT, () => {
   console.log(`Static server running on http://localhost:${PORT}`);
 });
@@ -16,8 +16,8 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
-    }
+      preload: path.join(__dirname, "preload.js"),
+    },
   });
   win.maximize();
 
@@ -27,12 +27,12 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
-  
-  app.on('activate', () => {
+
+  app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
 });

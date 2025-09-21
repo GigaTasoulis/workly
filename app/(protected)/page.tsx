@@ -1,8 +1,8 @@
 // @ts-nocheck
-"use client"
+"use client";
 
-import { useEffect, useMemo, useState } from "react"
-import Link from "next/link"
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -10,7 +10,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from "@/components/ui/card";
 import {
   Building2,
   Users,
@@ -20,28 +20,28 @@ import {
   BarChart,
   TrendingUp,
   TrendingDown,
-} from "lucide-react"
-import { RecentActivity } from "@/components/dashboard/recent-activity"
-import { StatCard } from "@/components/dashboard/stat-card"
-import { OverviewChart } from "@/components/dashboard/overview-chart"
-import { TopCustomers } from "@/components/dashboard/top-customers"
-import { TopDebts } from "@/components/dashboard/TopDebts"
-import { translations as t } from "@/lib/translations"
-import RequireAuth from "@/components/RequireAuth"
+} from "lucide-react";
+import { RecentActivity } from "@/components/dashboard/recent-activity";
+import { StatCard } from "@/components/dashboard/stat-card";
+import { OverviewChart } from "@/components/dashboard/overview-chart";
+import { TopCustomers } from "@/components/dashboard/top-customers";
+import { TopDebts } from "@/components/dashboard/TopDebts";
+import { translations as t } from "@/lib/translations";
+import RequireAuth from "@/components/RequireAuth";
 
-const n = (x: any) => Number(x ?? 0) || 0
+const n = (x: any) => Number(x ?? 0) || 0;
 
-type Counts = { suppliers: number; workplaces: number; customers: number; employees: number }
-type DebtItem = { id: string; name: string; debt: number }
+type Counts = { suppliers: number; workplaces: number; customers: number; employees: number };
+type DebtItem = { id: string; name: string; debt: number };
 type Metrics = {
-  currency: string
-  revenue: number
-  expenses: number
-  expensesBreakdown: { suppliers: number; payroll: number }
-  netBalance: number
-  activeTransactionsCount: number
-  topDebts: DebtItem[]
-}
+  currency: string;
+  revenue: number;
+  expenses: number;
+  expensesBreakdown: { suppliers: number; payroll: number };
+  netBalance: number;
+  activeTransactionsCount: number;
+  topDebts: DebtItem[];
+};
 
 export default function Home() {
   // Counts
@@ -50,10 +50,9 @@ export default function Home() {
     workplaces: 0,
     customers: 0,
     employees: 0,
-  })
+  });
 
-  const fmtMonth = (d = new Date()) =>
-    d.toISOString().slice(0, 7); // "YYYY-MM"
+  const fmtMonth = (d = new Date()) => d.toISOString().slice(0, 7); // "YYYY-MM"
 
   const [selectedMonth, setSelectedMonth] = useState<string>(fmtMonth());
 
@@ -66,7 +65,7 @@ export default function Home() {
     netBalance: 0,
     activeTransactionsCount: 0,
     topDebts: [],
-  })
+  });
 
   // ----- Config-driven modules (no hardcoded numbers)
   const modules = useMemo(
@@ -108,8 +107,8 @@ export default function Home() {
         count: counts.employees,
       },
     ],
-    [counts]
-  )
+    [counts],
+  );
 
   // ----- Config-driven stat cards (revenue/expenses/net/pending)
   const stats = useMemo(
@@ -152,12 +151,12 @@ export default function Home() {
         trend: metrics.netBalance > 0 ? "up" : metrics.netBalance < 0 ? "down" : "neutral",
       },
     ],
-    [metrics]
-  )
+    [metrics],
+  );
 
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => setMounted(true), [])
+  useEffect(() => setMounted(true), []);
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -209,38 +208,37 @@ export default function Home() {
         });
       } catch {}
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [selectedMonth]);
-  if (!mounted) return null
-
-  
+  if (!mounted) return null;
 
   return (
     <RequireAuth>
       <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{t.dashboard}</h1>
-          <p className="text-muted-foreground">
-            {t.welcome}, {t.businessManagementSolution}.
-          </p>
-        </div>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">{t.dashboard}</h1>
+            <p className="text-muted-foreground">
+              {t.welcome}, {t.businessManagementSolution}.
+            </p>
+          </div>
 
-        {/* Month picker */}
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-muted-foreground">{t?.selectMonth ?? "Μήνας:"}</label>
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="rounded-md border px-3 py-2 text-sm bg-white dark:bg-gray-900"
-          />
-          <button
-            className="text-sm underline"
-            onClick={() => setSelectedMonth("")}
-          >All time</button>
+          {/* Month picker */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-muted-foreground">{t?.selectMonth ?? "Μήνας:"}</label>
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="rounded-md border bg-white px-3 py-2 text-sm dark:bg-gray-900"
+            />
+            <button className="text-sm underline" onClick={() => setSelectedMonth("")}>
+              All time
+            </button>
+          </div>
         </div>
-      </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {stats.map((stat) => (
@@ -251,10 +249,10 @@ export default function Home() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           {modules.map((module) => (
             <Link key={module.title} href={module.href}>
-              <Card className="hover:shadow-md transition-shadow h-full">
-                <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <Card className="h-full transition-shadow hover:shadow-md">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-xl font-medium">{module.title}</CardTitle>
-                  <div className={`p-2 rounded-full ${module.color}`}>
+                  <div className={`rounded-full p-2 ${module.color}`}>
                     <div className={module.textColor}>{module.icon}</div>
                   </div>
                 </CardHeader>
@@ -315,5 +313,5 @@ export default function Home() {
         </div>
       </div>
     </RequireAuth>
-  )
+  );
 }

@@ -1,15 +1,15 @@
-import type React from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { TrendingDown, TrendingUp, Minus } from "lucide-react"
+import type React from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TrendingDown, TrendingUp, Minus } from "lucide-react";
 
 interface StatCardProps {
   stat: {
-    title: string
-    value: string
-    description: string
-    icon: React.ReactNode
-    trend: "up" | "down" | "neutral"
-  }
+    title: string;
+    value: string;
+    description: string;
+    icon: React.ReactNode;
+    trend: "up" | "down" | "neutral";
+  };
 }
 
 export function StatCard({ stat }: StatCardProps) {
@@ -27,7 +27,11 @@ export function StatCard({ stat }: StatCardProps) {
           {stat.trend === "neutral" && <Minus className="h-4 w-4 text-gray-500" />}
           <p
             className={`text-xs ${
-              stat.trend === "up" ? "text-green-500" : stat.trend === "down" ? "text-red-500" : "text-gray-500"
+              stat.trend === "up"
+                ? "text-green-500"
+                : stat.trend === "down"
+                  ? "text-red-500"
+                  : "text-gray-500"
             }`}
           >
             {stat.description}
@@ -35,6 +39,5 @@ export function StatCard({ stat }: StatCardProps) {
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
-

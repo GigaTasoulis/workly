@@ -13,7 +13,9 @@
     "dev:cf": "wrangler pages dev out",
     "migrate:local": "wrangler d1 migrations apply workly-dev --local",
     "migrate:preview": "wrangler d1 migrations apply workly-preview --env preview --remote",
-    "migrate:prod": "wrangler d1 migrations apply workly-prod --env production --remote"
+    "migrate:prod": "wrangler d1 migrations apply workly-prod --env production --remote",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "build": {
     "appId": "com.example.myapp",
@@ -101,9 +103,23 @@
     "@types/react-dom": "^18",
     "electron": "^35.7.5",
     "electron-builder": "^25.1.8",
+    "eslint": "8.57.1",
+    "eslint-config-next": "15.5.3",
     "postcss": "^8",
+    "prettier": "^3.6.2",
+    "prettier-plugin-tailwindcss": "^0.6.14",
     "tailwindcss": "^3.4.17",
     "typescript": "^5",
     "wrangler": "^4.29.1"
+  },
+  "prettier": {
+    "semi": true,
+    "singleQuote": false,
+    "trailingComma": "all",
+    "printWidth": 100,
+    "tabWidth": 2,
+    "plugins": [
+      "prettier-plugin-tailwindcss"
+    ]
   }
 }

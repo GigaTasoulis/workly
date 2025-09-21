@@ -1,10 +1,10 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ShoppingBag, Users, Building2, Briefcase } from "lucide-react"
-import { translations as t } from "@/lib/translations"
-import { getLocalData } from "@/lib/utils"
+import { useEffect, useState } from "react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ShoppingBag, Users, Building2, Briefcase } from "lucide-react";
+import { translations as t } from "@/lib/translations";
+import { getLocalData } from "@/lib/utils";
 
 const iconMap: { [key: string]: React.ReactNode } = {
   users: <Users className="h-4 w-4" />,
@@ -14,7 +14,7 @@ const iconMap: { [key: string]: React.ReactNode } = {
 };
 
 export function RecentActivity() {
-  const [activities, setActivities] = useState<any[]>([])
+  const [activities, setActivities] = useState<any[]>([]);
 
   const loadActivities = () => {
     const stored = getLocalData("recentActivity") || [];
@@ -28,7 +28,7 @@ export function RecentActivity() {
   }, []);
 
   if (activities.length === 0) {
-    return <div className="text-sm text-muted-foreground">No recent activity.</div>
+    return <div className="text-sm text-muted-foreground">No recent activity.</div>;
   }
 
   return (
@@ -53,5 +53,5 @@ export function RecentActivity() {
         </div>
       ))}
     </div>
-  );  
+  );
 }

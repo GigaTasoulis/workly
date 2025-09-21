@@ -1,7 +1,7 @@
-'use client';
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+"use client";
+import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || ''; // '' = same origin
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || ""; // '' = same origin
 
 type User = { id: string; username: string } | null;
 
@@ -28,7 +28,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/auth/me`, { credentials: 'include' });
+        const res = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
         if (res.ok) {
           const data = await res.json();
           if (data?.authenticated) setUser(data.user);
@@ -41,14 +41,14 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, password: string) => {
     const res = await fetch(`${API_BASE}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ username, password }),
     });
     if (!res.ok) return false;
 
-    const me = await fetch(`${API_BASE}/api/auth/me`, { credentials: 'include' });
+    const me = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
     if (me.ok) {
       const data = await me.json();
       setUser(data.user ?? null);
@@ -57,7 +57,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+    await fetch(`${API_BASE}/api/auth/logout`, { method: "POST", credentials: "include" });
     setUser(null);
   };
 

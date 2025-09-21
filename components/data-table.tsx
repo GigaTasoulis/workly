@@ -1,54 +1,66 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { PlusCircle, Search, Pencil } from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { useToast } from "@/components/ui/use-toast"
-import { translations as t } from "@/lib/translations"
+import { useState } from "react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { PlusCircle, Search, Pencil } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from "@/components/ui/use-toast";
+import { translations as t } from "@/lib/translations";
 
 interface Column {
-  key: string
-  label: string
+  key: string;
+  label: string;
 }
 
 interface DataTableProps {
-  columns: Column[]
-  data: any[]
-  onAdd: () => void
-  onEdit: (item: any) => void
-  onDelete: (id: string) => void
-  onSelect?: (item: any) => void // Make this prop optional
+  columns: Column[];
+  data: any[];
+  onAdd: () => void;
+  onEdit: (item: any) => void;
+  onDelete: (id: string) => void;
+  onSelect?: (item: any) => void; // Make this prop optional
 }
 
 export function DataTable({ columns, data, onAdd, onEdit, onDelete, onSelect }: DataTableProps) {
-  const [searchTerm, setSearchTerm] = useState("")
-  const { toast } = useToast()
+  const [searchTerm, setSearchTerm] = useState("");
+  const { toast } = useToast();
 
   const filteredData = data.filter((item) => {
     return columns.some((column) => {
-      const value = item[column.key]
-      return value && value.toString().toLowerCase().includes(searchTerm.toLowerCase())
-    })
-  })
+      const value = item[column.key];
+      return value && value.toString().toLowerCase().includes(searchTerm.toLowerCase());
+    });
+  });
 
   const handleDelete = (id: string) => {
     if (confirm("Are you sure you want to delete this item?")) {
-      onDelete(id)
+      onDelete(id);
       toast({
         title: "Item deleted",
         description: "The item has been successfully deleted.",
-      })
+      });
     }
-  }
+  };
 
   const handleRowClick = (item: any) => {
     if (onSelect) {
-      onSelect(item)
+      onSelect(item);
     }
-  }
+  };
 
   return (
     <div className="space-y-4">
@@ -101,16 +113,16 @@ export function DataTable({ columns, data, onAdd, onEdit, onDelete, onSelect }: 
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
                           onClick={(e) => {
-                            e.stopPropagation()
-                            onEdit(item)
+                            e.stopPropagation();
+                            onEdit(item);
                           }}
                         >
                           {t.edit}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={(e) => {
-                            e.stopPropagation()
-                            handleDelete(item.id)
+                            e.stopPropagation();
+                            handleDelete(item.id);
                           }}
                           className="text-red-600"
                         >
@@ -132,6 +144,5 @@ export function DataTable({ columns, data, onAdd, onEdit, onDelete, onSelect }: 
         </Table>
       </div>
     </div>
-  )
+  );
 }
-

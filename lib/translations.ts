@@ -214,5 +214,4 @@ export const translations = {
   years: "έτη",
   monthss: "μήνες",
   issued: "Εκδόθηκε",
-}
-
+};

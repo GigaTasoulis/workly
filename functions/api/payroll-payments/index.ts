@@ -31,21 +31,26 @@ export async function onRequest({ request, env }: any) {
   const amount = n(b?.amount);
   if (!(amount > 0)) return json({ error: "amount must be > 0" }, 400, cors());
 
-  const date = String(b?.date || "").trim() || new Date().toISOString().slice(0,10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return json({ error: "date must be YYYY-MM-DD" }, 400, cors());
+  const date = String(b?.date || "").trim() || new Date().toISOString().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
+    return json({ error: "date must be YYYY-MM-DD" }, 400, cors());
 
   // Allow caller to pass either transaction_id or worklog_id
   let tx = null;
   if (b?.transaction_id) {
     tx = await env.DB.prepare(
       `SELECT id, employee_id, worklog_id, amount, amount_paid, status FROM payroll_transactions
-       WHERE user_id = ? AND id = ?`
-    ).bind(user.user_id, String(b.transaction_id).trim()).first();
+       WHERE user_id = ? AND id = ?`,
+    )
+      .bind(user.user_id, String(b.transaction_id).trim())
+      .first();
   } else if (b?.worklog_id) {
     tx = await env.DB.prepare(
       `SELECT id, employee_id, worklog_id, amount, amount_paid, status FROM payroll_transactions
-       WHERE user_id = ? AND worklog_id = ?`
-    ).bind(user.user_id, String(b.worklog_id).trim()).first();
+       WHERE user_id = ? AND worklog_id = ?`,
+    )
+      .bind(user.user_id, String(b.worklog_id).trim())
+      .first();
   } else {
     return json({ error: "transaction_id or worklog_id required" }, 400, cors());
   }
@@ -59,26 +64,50 @@ export async function onRequest({ request, env }: any) {
   await env.DB.prepare(
     `INSERT INTO payroll_payments
       (id, user_id, transaction_id, worklog_id, employee_id, amount, date, note)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(
-    pid, user.user_id, tx.id, tx.worklog_id, tx.employee_id, amount, date,
-    String(b?.note || "").trim() || null
-  ).run();
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      pid,
+      user.user_id,
+      tx.id,
+      tx.worklog_id,
+      tx.employee_id,
+      amount,
+      date,
+      String(b?.note || "").trim() || null,
+    )
+    .run();
 
   // 2) bump transaction totals
   await env.DB.prepare(
     `UPDATE payroll_transactions
         SET amount_paid = ?, status = ?, updated_at = strftime('%s','now')
-      WHERE user_id = ? AND id = ?`
-  ).bind(newPaid, newStatus, user.user_id, tx.id).run();
+      WHERE user_id = ? AND id = ?`,
+  )
+    .bind(newPaid, newStatus, user.user_id, tx.id)
+    .run();
 
-  return json({ ok: true, payment: { id: pid }, transaction: { id: tx.id, amount_paid: newPaid, status: newStatus } }, 201, cors());
+  return json(
+    {
+      ok: true,
+      payment: { id: pid },
+      transaction: { id: tx.id, amount_paid: newPaid, status: newStatus },
+    },
+    201,
+    cors(),
+  );
 }
 
 function json(data: any, status = 200, headers?: Record<string, string>) {
   return new Response(JSON.stringify(data), { status, headers });
 }
-async function safeJson(req: Request) { try { return await req.json(); } catch { return null; } }
+async function safeJson(req: Request) {
+  try {
+    return await req.json();
+  } catch {
+    return null;
+  }
+}
 async function getUserFromSession(env: any, request: Request) {
   const m = (request.headers.get("cookie") || "").match(/\bsession=([^;]+)/);
   if (!m) return null;
@@ -87,6 +116,8 @@ async function getUserFromSession(env: any, request: Request) {
   return await env.DB.prepare(
     `SELECT u.id AS user_id, u.username
        FROM auth_sessions s JOIN auth_users u ON u.id = s.user_id
-      WHERE s.id = ? AND s.expires_at > ?`
-  ).bind(sid, now).first();
+      WHERE s.id = ? AND s.expires_at > ?`,
+  )
+    .bind(sid, now)
+    .first();
 }

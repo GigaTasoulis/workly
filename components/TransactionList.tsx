@@ -4,7 +4,13 @@
 import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { format } from "date-fns";
 import { Calendar, DollarSign } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -28,10 +34,14 @@ const isPending = (s: string) => s === "pending" || s === "Σε εκκρεμότ
 // Normalize to Greek for display
 function statusLabel(s: string): string {
   switch (s) {
-    case "paid": return "Πληρώθηκε";
-    case "pending": return "Σε εκκρεμότητα";
-    case "cancelled": return "Ακυρώθηκε";
-    default: return s;
+    case "paid":
+      return "Πληρώθηκε";
+    case "pending":
+      return "Σε εκκρεμότητα";
+    case "cancelled":
+      return "Ακυρώθηκε";
+    default:
+      return s;
   }
 }
 
@@ -74,7 +84,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     let filtered = transactions;
     if (search.trim()) {
       filtered = filtered.filter((t) =>
-        t.productName.toLowerCase().includes(search.trim().toLowerCase())
+        t.productName.toLowerCase().includes(search.trim().toLowerCase()),
       );
     }
     filtered.sort((a, b) => {
@@ -88,11 +98,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE);
   const currentTransactions = useMemo(
     () =>
-      filteredTransactions.slice(
-        (currentPage - 1) * ITEMS_PER_PAGE,
-        currentPage * ITEMS_PER_PAGE
-      ),
-    [filteredTransactions, currentPage]
+      filteredTransactions.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE),
+    [filteredTransactions, currentPage],
   );
 
   const handlePrevPage = () => {
@@ -112,7 +119,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   return (
     <div>
       {/* Filter & Sort Controls */}
-      <div className="flex justify-between items-center mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <Input
           type="text"
           placeholder="Αναζήτησε συναλλαγή"
@@ -143,7 +150,14 @@ export const TransactionList: React.FC<TransactionListProps> = ({
             <div className="flex-1 space-y-1">
               <div className="flex items-center justify-between">
                 <p className="font-medium">{transaction.productName}</p>
-                <Badge variant="outline" className={getStatusColor ? getStatusColor(transaction.status) : statusBadgeClass(transaction.status)}>
+                <Badge
+                  variant="outline"
+                  className={
+                    getStatusColor
+                      ? getStatusColor(transaction.status)
+                      : statusBadgeClass(transaction.status)
+                  }
+                >
                   {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
                 </Badge>
               </div>
@@ -151,8 +165,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                 <Calendar className="h-4 w-4" />
                 {format(new Date(transaction.date), "MMM d, yyyy")}
                 <span>•</span>
-                <DollarSign className="h-4 w-4" />
-                €{(Number(transaction.amount) || 0).toLocaleString()}
+                <DollarSign className="h-4 w-4" />€
+                {(Number(transaction.amount) || 0).toLocaleString()}
               </div>
               <p className="text-xs text-muted-foreground">
                 Εξοφλημένο: €{(Number(transaction.amountPaid) || 0).toLocaleString()} / €
@@ -163,7 +177,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                 {(Number(transaction.amount) - Number(transaction.amountPaid)).toLocaleString()}
               </p>
               {transaction.notes && (
-                <p className="text-sm text-muted-foreground mt-2">{transaction.notes}</p>
+                <p className="mt-2 text-sm text-muted-foreground">{transaction.notes}</p>
               )}
             </div>
             <div className="flex flex-col gap-2">
@@ -188,7 +202,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
       {/* Pagination Controls */}
       {totalPages > 1 && (
-        <div className="flex justify-center items-center mt-4 space-x-4">
+        <div className="mt-4 flex items-center justify-center space-x-4">
           <Button size="sm" onClick={handlePrevPage} disabled={currentPage === 1}>
             ←
           </Button>

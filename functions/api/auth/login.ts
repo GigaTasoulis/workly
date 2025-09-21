@@ -9,7 +9,13 @@ function json(data: unknown, init: ResponseInit = {}) {
 function cookieHeader(
   name: string,
   value: string,
-  opts: { path?: string; maxAge?: number; httpOnly?: boolean; secure?: boolean; sameSite?: "Lax"|"Strict"|"None" } = {}
+  opts: {
+    path?: string;
+    maxAge?: number;
+    httpOnly?: boolean;
+    secure?: boolean;
+    sameSite?: "Lax" | "Strict" | "None";
+  } = {},
 ) {
   const parts = [`${name}=${value}`];
   parts.push(`Path=${opts.path ?? "/"}`);
@@ -56,40 +62,53 @@ export async function onRequest(context: any) {
   }
 
   let body: any = {};
-  try { body = await request.json(); } catch { return json({ error: "Invalid JSON" }, { status: 400 }); }
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "Invalid JSON" }, { status: 400 });
+  }
   const { username, password } = body || {};
   if (!username || !password) return json({ error: "Missing credentials" }, { status: 400 });
 
-  const row = await env.DB.prepare(
-    "SELECT id, password_hash FROM auth_users WHERE username = ?"
-  ).bind(username).first() as { id: string; password_hash: string } | null;
+  const row = (await env.DB.prepare("SELECT id, password_hash FROM auth_users WHERE username = ?")
+    .bind(username)
+    .first()) as { id: string; password_hash: string } | null;
 
   if (!row) {
     const h = corsHeaders(origin);
-    return new Response(JSON.stringify({ error: "Invalid credentials" }), { status: 401, headers: h });
+    return new Response(JSON.stringify({ error: "Invalid credentials" }), {
+      status: 401,
+      headers: h,
+    });
   }
   const ok = await compare(password, row.password_hash);
   if (!ok) {
     const h = corsHeaders(origin);
-    return new Response(JSON.stringify({ error: "Invalid credentials" }), { status: 401, headers: h });
+    return new Response(JSON.stringify({ error: "Invalid credentials" }), {
+      status: 401,
+      headers: h,
+    });
   }
 
   const sessionId = crypto.randomUUID();
   const maxAge = 60 * 60 * 24 * 30; // 30 days
   const expiresAt = Math.floor(Date.now() / 1000) + maxAge;
 
-  await env.DB.prepare(
-    "INSERT INTO auth_sessions (id, user_id, expires_at) VALUES (?, ?, ?)"
-  ).bind(sessionId, row.id, expiresAt).run();
+  await env.DB.prepare("INSERT INTO auth_sessions (id, user_id, expires_at) VALUES (?, ?, ?)")
+    .bind(sessionId, row.id, expiresAt)
+    .run();
 
   const h = corsHeaders(origin);
-  h.set("Set-Cookie", cookieHeader("session", sessionId, {
-    path: "/",
-    maxAge,
-    httpOnly: true,
-    secure: isHttps, // allow over HTTP in local dev
-    sameSite: "Lax",
-  }));
+  h.set(
+    "Set-Cookie",
+    cookieHeader("session", sessionId, {
+      path: "/",
+      maxAge,
+      httpOnly: true,
+      secure: isHttps, // allow over HTTP in local dev
+      sameSite: "Lax",
+    }),
+  );
   h.set("Content-Type", "application/json");
 
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: h });

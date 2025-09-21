@@ -29,16 +29,23 @@ export async function onRequest({ request, env }: any) {
   // Helpers
   const n = (x: any) => Number(x ?? 0) || 0;
   const hasTable = async (name: string) => {
-    const r = await env.DB.prepare(
-      "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?"
-    ).bind(name).first();
+    const r = await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?")
+      .bind(name)
+      .first();
     return !!r;
   };
   const safeFirst = async (sql: string, binds: any[]) => {
     try {
-      return await env.DB.prepare(sql).bind(...binds).first();
+      return await env.DB.prepare(sql)
+        .bind(...binds)
+        .first();
     } catch (e: any) {
-      if (String(e?.message || e).toLowerCase().includes("no such table")) return null;
+      if (
+        String(e?.message || e)
+          .toLowerCase()
+          .includes("no such table")
+      )
+        return null;
       throw e;
     }
   };
@@ -53,23 +60,33 @@ export async function onRequest({ request, env }: any) {
   // Choose correct customer transactions table
   const ctTable = (await hasTable("customer_transactions"))
     ? "customer_transactions"
-    : (await hasTable("transactions")) ? "transactions" : null;
+    : (await hasTable("transactions"))
+      ? "transactions"
+      : null;
   const stTable = (await hasTable("supplier_transactions")) ? "supplier_transactions" : null;
   const ptTable = (await hasTable("payroll_transactions")) ? "payroll_transactions" : null;
 
   try {
     // ---------- COUNTS (lifetime, not month-filtered) ----------
     const [sup, wp, cust, emp] = await Promise.all([
-      env.DB.prepare("SELECT COUNT(*) AS c FROM suppliers  WHERE user_id = ?").bind(user.user_id).first(),
-      env.DB.prepare("SELECT COUNT(*) AS c FROM workplaces WHERE user_id = ?").bind(user.user_id).first(),
-      env.DB.prepare("SELECT COUNT(*) AS c FROM customers  WHERE user_id = ?").bind(user.user_id).first(),
-      env.DB.prepare("SELECT COUNT(*) AS c FROM employees  WHERE user_id = ?").bind(user.user_id).first(),
+      env.DB.prepare("SELECT COUNT(*) AS c FROM suppliers  WHERE user_id = ?")
+        .bind(user.user_id)
+        .first(),
+      env.DB.prepare("SELECT COUNT(*) AS c FROM workplaces WHERE user_id = ?")
+        .bind(user.user_id)
+        .first(),
+      env.DB.prepare("SELECT COUNT(*) AS c FROM customers  WHERE user_id = ?")
+        .bind(user.user_id)
+        .first(),
+      env.DB.prepare("SELECT COUNT(*) AS c FROM employees  WHERE user_id = ?")
+        .bind(user.user_id)
+        .first(),
     ]);
     const counts = {
-      suppliers:  n(sup?.c),
+      suppliers: n(sup?.c),
       workplaces: n(wp?.c),
-      customers:  n(cust?.c),
-      employees:  n(emp?.c),
+      customers: n(cust?.c),
+      employees: n(emp?.c),
     };
 
     // ---------- FINANCIALS (month-filtered when ?month is present) ----------
@@ -80,7 +97,7 @@ export async function onRequest({ request, env }: any) {
     if (ctTable) {
       const revRow = await safeFirst(
         `SELECT COALESCE(SUM(amount_paid), 0) AS v FROM ${ctTable} WHERE user_id = ?${dateFilter}`,
-        hasMonth ? [user.user_id, monthStart, nextMonthStart] : [user.user_id]
+        hasMonth ? [user.user_id, monthStart, nextMonthStart] : [user.user_id],
       );
       revenue = n(revRow?.v);
     }
@@ -90,7 +107,7 @@ export async function onRequest({ request, env }: any) {
     if (stTable) {
       const expSup = await safeFirst(
         `SELECT COALESCE(SUM(amount_paid), 0) AS v FROM ${stTable} WHERE user_id = ?${dateFilter}`,
-        hasMonth ? [user.user_id, monthStart, nextMonthStart] : [user.user_id]
+        hasMonth ? [user.user_id, monthStart, nextMonthStart] : [user.user_id],
       );
       expensesSuppliers = n(expSup?.v);
     }
@@ -99,7 +116,7 @@ export async function onRequest({ request, env }: any) {
     if (ptTable) {
       const expPay = await safeFirst(
         `SELECT COALESCE(SUM(amount_paid), 0) AS v FROM ${ptTable} WHERE user_id = ?${dateFilter}`,
-        hasMonth ? [user.user_id, monthStart, nextMonthStart] : [user.user_id]
+        hasMonth ? [user.user_id, monthStart, nextMonthStart] : [user.user_id],
       );
       expensesPayroll = n(expPay?.v);
     }
@@ -114,7 +131,7 @@ export async function onRequest({ request, env }: any) {
       const pCust = await safeFirst(
         `SELECT COUNT(*) AS c FROM ${ctTable}
           WHERE user_id = ? AND status = 'pending'${dateFilter}`,
-        hasMonth ? [user.user_id, monthStart, nextMonthStart] : [user.user_id]
+        hasMonth ? [user.user_id, monthStart, nextMonthStart] : [user.user_id],
       );
       activeTransactionsCount += n(pCust?.c);
     }
@@ -123,7 +140,7 @@ export async function onRequest({ request, env }: any) {
       const pSup = await safeFirst(
         `SELECT COUNT(*) AS c FROM ${stTable}
           WHERE user_id = ? AND status = 'pending'${dateFilter}`,
-        hasMonth ? [user.user_id, monthStart, nextMonthStart] : [user.user_id]
+        hasMonth ? [user.user_id, monthStart, nextMonthStart] : [user.user_id],
       );
       activeTransactionsCount += n(pSup?.c);
     }
@@ -144,10 +161,10 @@ export async function onRequest({ request, env }: any) {
         HAVING revenue > 0
       ORDER BY revenue DESC
         LIMIT 4`;
-      const binds = hasMonth
-        ? [monthStart, nextMonthStart, user.user_id]
-        : [user.user_id];
-      const rows = await env.DB.prepare(sql).bind(...binds).all();
+      const binds = hasMonth ? [monthStart, nextMonthStart, user.user_id] : [user.user_id];
+      const rows = await env.DB.prepare(sql)
+        .bind(...binds)
+        .all();
 
       topCustomers = (rows?.results ?? []).map((r: any) => ({
         id: String(r.id),
@@ -157,12 +174,11 @@ export async function onRequest({ request, env }: any) {
       }));
     }
 
-
     if (ptTable) {
       const pPay = await safeFirst(
         `SELECT COUNT(*) AS c FROM ${ptTable}
           WHERE user_id = ? AND status = 'pending'${dateFilter}`,
-        hasMonth ? [user.user_id, monthStart, nextMonthStart] : [user.user_id]
+        hasMonth ? [user.user_id, monthStart, nextMonthStart] : [user.user_id],
       );
       activeTransactionsCount += n(pPay?.c);
     }
@@ -182,8 +198,10 @@ export async function onRequest({ request, env }: any) {
           GROUP BY c.id, c.name
           HAVING debt > 0
           ORDER BY debt DESC
-          LIMIT 5`
-      ).bind(user.user_id).all();
+          LIMIT 5`,
+      )
+        .bind(user.user_id)
+        .all();
 
       topDebts = (q?.results ?? []).map((r: any) => ({
         id: String(r.id),
@@ -192,36 +210,44 @@ export async function onRequest({ request, env }: any) {
       }));
     }
 
-    return json({
-      ok: true,
-      counts,
-      metrics: {
-        currency: "EUR",
-        revenue,
-        expenses,
-        expensesBreakdown: { suppliers: expensesSuppliers, payroll: expensesPayroll },
-        netBalance,
-        activeTransactionsCount,
-        topDebts,
-        topCustomers,
+    return json(
+      {
+        ok: true,
+        counts,
+        metrics: {
+          currency: "EUR",
+          revenue,
+          expenses,
+          expensesBreakdown: { suppliers: expensesSuppliers, payroll: expensesPayroll },
+          netBalance,
+          activeTransactionsCount,
+          topDebts,
+          topCustomers,
+        },
       },
-    }, 200, cors());
+      200,
+      cors(),
+    );
   } catch (err: any) {
-    return json({
-      ok: false,
-      error: String(err?.message ?? err),
-      counts: { suppliers: 0, workplaces: 0, customers: 0, employees: 0 },
-      metrics: {
-        currency: "EUR",
-        revenue: 0,
-        expenses: 0,
-        expensesBreakdown: { suppliers: 0, payroll: 0 },
-        netBalance: 0,
-        activeTransactionsCount: 0,
-        topDebts: [],
-        topCustomers: [],
+    return json(
+      {
+        ok: false,
+        error: String(err?.message ?? err),
+        counts: { suppliers: 0, workplaces: 0, customers: 0, employees: 0 },
+        metrics: {
+          currency: "EUR",
+          revenue: 0,
+          expenses: 0,
+          expensesBreakdown: { suppliers: 0, payroll: 0 },
+          netBalance: 0,
+          activeTransactionsCount: 0,
+          topDebts: [],
+          topCustomers: [],
+        },
       },
-    }, 200, cors());
+      200,
+      cors(),
+    );
   }
 }
 
@@ -244,6 +270,8 @@ async function getUserFromSession(env: any, request: Request) {
   return await env.DB.prepare(
     `SELECT u.id AS user_id, u.username
        FROM auth_sessions s JOIN auth_users u ON u.id = s.user_id
-      WHERE s.id = ? AND s.expires_at > ?`
-  ).bind(sid, now).first();
+      WHERE s.id = ? AND s.expires_at > ?`,
+  )
+    .bind(sid, now)
+    .first();
 }

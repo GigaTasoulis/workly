@@ -1,24 +1,20 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import SWRegister from './sw-register';
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import SWRegister from "./sw-register";
 
-import AuthProvider from '@/components/AuthProvider';
-import ClientLayout from '@/components/ClientLayout';
-import { Toaster } from '@/components/ui/toaster';
+import AuthProvider from "@/components/AuthProvider";
+import ClientLayout from "@/components/ClientLayout";
+import { Toaster } from "@/components/ui/toaster";
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Work-ly | Διαχείριση Επιχείρισης',
-  description: 'Διαχειριστείτε αποτελεσματικά τα δεδομένα της επιχείρησής σας',
+  title: "Work-ly | Διαχείριση Επιχείρισης",
+  description: "Διαχειριστείτε αποτελεσματικά τα δεδομένα της επιχείρησής σας",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>

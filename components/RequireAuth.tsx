@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { ReactNode, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/components/AuthProvider';
+import { ReactNode, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function RequireAuth({ children }: { children: ReactNode }) {
   const { user, initialized } = useAuth();
@@ -10,19 +10,19 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
   const [canRender, setCanRender] = useState(false);
 
   useEffect(() => {
-    if (!initialized) return;              // wait until we know
+    if (!initialized) return; // wait until we know
     if (!user) {
       // trailing slash since your Next config has trailingSlash: true
-      router.replace('/login/');
+      router.replace("/login/");
       return;
     }
-    setCanRender(true);                    // show protected content
+    setCanRender(true); // show protected content
   }, [initialized, user, router]);
 
   // Avoid flashing protected HTML before we know auth state
   if (!initialized || !canRender) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-sm text-gray-500">
+      <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">
         Loading…
       </div>
     );

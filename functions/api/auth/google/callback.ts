@@ -1,7 +1,8 @@
 // functions/api/auth/google/callback.ts
+import { hash } from "bcryptjs";
+
 export async function onRequest({ request, env }: any) {
   const url = new URL(request.url);
-  const origin = url.origin;
 
   try {
     const clientId = env.GOOGLE_CLIENT_ID;
@@ -26,7 +27,7 @@ export async function onRequest({ request, env }: any) {
     if (cookieState !== state) return json({ error: "State mismatch" }, 400);
     if (!verifier) return json({ error: "Missing PKCE verifier" }, 400);
 
-    // --- Exchange code for tokens (show real error if it fails)
+    // --- Exchange code for tokens
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -69,71 +70,94 @@ export async function onRequest({ request, env }: any) {
 
     // --- Link or create local user
     const provider = "google";
-    let userId: string | null = null;
+    const ID_TABLE = "auth_identities";
 
-    const ident = await env.DB.prepare(
-      "SELECT user_id FROM auth_identities WHERE provider = ? AND provider_id = ?",
+    // tiny helper: never pass undefined to D1
+    const nn = (v: any) => (v === undefined ? null : v);
+
+    // 1) Look up identity by provider/sub
+    const identRow = (await env.DB.prepare(
+      `SELECT user_id FROM ${ID_TABLE} WHERE provider = ? AND provider_id = ?`,
     )
       .bind(provider, sub)
-      .first();
+      .first()) as { user_id?: string } | null;
 
-    if (ident?.user_id) {
-      userId = String(ident.user_id);
-    } else {
-      // if email already exists, link to that user; else create a new user
-      let existingUser = null;
+    let userId: string | undefined = identRow?.user_id;
+
+    // 2) If not linked, try to find existing user by email (username)
+    if (!userId) {
+      let existing: { id?: string } | null = null;
       if (email) {
-        existingUser = await env.DB.prepare("SELECT id FROM auth_users WHERE username = ?")
+        existing = (await env.DB.prepare("SELECT id FROM auth_users WHERE username = ?")
           .bind(email)
-          .first();
+          .first()) as any;
       }
-      if (existingUser?.id) {
-        userId = String(existingUser.id);
+
+      if (existing?.id) {
+        userId = String(existing.id);
       } else {
-        userId = crypto.randomUUID().replace(/-/g, "");
+        // 3) Create a new local user with a dummy bcrypt hash (password_hash is NOT NULL)
+        userId = crypto.randomUUID();
         const username = email || `google_${sub}`;
+        const dummyHash = await hash(crypto.randomUUID(), 12);
+
         await env.DB.prepare(
-          "INSERT INTO auth_users (id, username, created_at) VALUES (?, ?, strftime('%s','now'))",
+          "INSERT INTO auth_users (id, username, password_hash) VALUES (?, ?, ?)",
         )
-          .bind(userId, username)
+          .bind(userId, username, dummyHash)
           .run();
       }
 
+      // 4) Link identity
       await env.DB.prepare(
-        `INSERT OR IGNORE INTO auth_identities
+        `INSERT OR IGNORE INTO ${ID_TABLE}
            (user_id, provider, provider_id, email, name, picture, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, CAST(strftime('%s','now') AS INTEGER))`,
+         VALUES (?, ?, ?, ?, ?, ?, unixepoch())`,
       )
-        .bind(userId, provider, sub, email || null, name || null, picture || null)
+        .bind(userId, provider, sub, nn(email), nn(name), nn(picture))
         .run();
+    }
+
+    if (!userId) {
+      // extra guard so we never bind undefined to D1
+      return json({ error: "user_link_failed" }, 500);
     }
 
     // --- Create a session
     const sid = crypto.randomUUID();
-    const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30; // 30 days
+    const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
+
     await env.DB.prepare("INSERT INTO auth_sessions (id, user_id, expires_at) VALUES (?, ?, ?)")
       .bind(sid, userId, expiresAt)
       .run();
 
+    // --- Clear temp cookies and set session
     const secure = url.protocol === "https:" ? "; Secure" : "";
-    const cookies = [
+    const headers = new Headers({ Location: returnTo || "/" });
+    headers.append(
+      "Set-Cookie",
       `oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`,
+    );
+    headers.append(
+      "Set-Cookie",
       `pkce_verifier=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`,
-      `return_to=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`,
-      `session=${encodeURIComponent(sid)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}${secure}`,
-    ];
+    );
+    headers.append("Set-Cookie", `return_to=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`);
+    headers.append(
+      "Set-Cookie",
+      `session=${encodeURIComponent(sid)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${
+        60 * 60 * 24 * 30
+      }${secure}`,
+    );
 
-    return new Response(null, {
-      status: 302,
-      headers: { "Set-Cookie": cookies, Location: returnTo || "/" },
-    });
+    return new Response(null, { status: 302, headers });
   } catch (err: any) {
     console.error("google/callback fatal:", err?.stack || err);
-    return json({ error: "internal_error" }, 500);
+    return json({ error: "internal_error", detail: String(err?.message || err) }, 500);
   }
 }
 
-/* helpers */
+/* helpers (unchanged) */
 function json(data: any, status = 200, headers?: Record<string, string>) {
   return new Response(JSON.stringify(data), {
     status,

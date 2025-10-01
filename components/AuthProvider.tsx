@@ -8,6 +8,7 @@ type User = { id: string; username: string } | null;
 interface AuthContextType {
   user: User;
   login: (u: string, p: string) => Promise<boolean>;
+  register: (u: string, p: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   initialized: boolean;
 }
@@ -15,6 +16,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   login: async () => false,
+  register: async () => ({ ok: false, error: "not-implemented" }),
   logout: async () => {},
   initialized: false,
 });
@@ -56,13 +58,35 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   };
 
+  const register = async (username: string, password: string) => {
+    const res = await fetch(`${API_BASE}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { ok: false, error: data?.error || "Registration failed" };
+    }
+
+    // session cookie already set by server
+    const me = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
+    if (me.ok) {
+      const data = await me.json();
+      setUser(data.user ?? null);
+    }
+    return { ok: true };
+  };
+
   const logout = async () => {
     await fetch(`${API_BASE}/api/auth/logout`, { method: "POST", credentials: "include" });
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, initialized }}>
+    <AuthContext.Provider value={{ user, login, register, logout, initialized }}>
       {children}
     </AuthContext.Provider>
   );

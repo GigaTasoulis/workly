@@ -15,5 +15,4 @@ CREATE TABLE IF NOT EXISTS customers (
 
 CREATE INDEX IF NOT EXISTS idx_customers_owner ON customers(user_id);
 CREATE INDEX IF NOT EXISTS idx_customers_name  ON customers(name);
-ALTER TABLE customers ADD COLUMN contact_person TEXT;
 

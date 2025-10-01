@@ -9,7 +9,6 @@ import { Menu } from "lucide-react";
 import ThemeToggleButton from "@/components/ThemeToggleButton";
 
 function MobileTopBar({ onMenu }: { onMenu: () => void }) {
-  // Visible only under 1100px
   return (
     <div className="sticky top-0 z-40 border-b bg-gray-50/80 backdrop-blur supports-[backdrop-filter]:bg-gray-50/60 dark:bg-gray-900/80 min-[1100px]:hidden">
       <div className="flex items-center justify-between px-4 py-3">
@@ -29,11 +28,36 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const path = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  console.log("ClientLayout mount", { path, initialized, hasUser: !!user });
+
+  // inside your existing useEffect, just before each router.replace:
   useEffect(() => {
     if (!initialized) return;
-    if (!user && path !== "/login") router.replace("/login");
-    else if (user && path === "/login") router.replace("/");
-  }, [user, path, router, initialized]);
+
+    // normalize trailing slash: "/register/" -> "/register"
+    const p = path && path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path || "/";
+    const isPublic = p === "/login" || p === "/register";
+
+    // debug so we can see what the guard decides
+    console.log("auth-guard", {
+      rawPath: path,
+      normalized: p,
+      initialized,
+      hasUser: !!user,
+      isPublic,
+    });
+
+    if (!user) {
+      if (!isPublic) {
+        router.replace("/login");
+      }
+      return; // ✅ never redirect off /login or /register
+    }
+
+    if (isPublic && p !== "/") {
+      router.replace("/");
+    }
+  }, [initialized, user, path, router]);
 
   if (!initialized) return null;
 

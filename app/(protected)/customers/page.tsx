@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { translations as t } from "@/lib/translations";
 import CustomerPaymentHistory from "@/components/customers/CustomerPaymentHistory";
-
+import SimplePager from "@/components/pagination/SimplePager";
 /* ---------------- Status helpers (UI <-> API) ---------------- */
 
 const STATUS_API = ["pending", "paid", "cancelled"] as const;
@@ -268,6 +268,22 @@ export default function CustomersPage() {
   const { toast } = useToast();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
+
+  // Pagination
+const [page, setPage] = useState(1);
+const pageSize = 7;
+const totalPages = useMemo(
+  () => Math.max(1, Math.ceil((customers?.length ?? 0) / pageSize)),
+  [customers?.length]
+);
+const pageSafe = Math.min(Math.max(1, page), totalPages);
+useEffect(() => { if (page !== pageSafe) setPage(pageSafe); }, [pageSafe]);
+
+const pagedCustomers = useMemo(() => {
+  const start = (pageSafe - 1) * pageSize;
+  return customers.slice(start, start + pageSize);
+}, [customers, pageSafe]);
+
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const [transactions, setTransactions] = useState<CustomerTransaction[]>([]);
@@ -634,12 +650,17 @@ export default function CustomersPage() {
         <div className="md:col-span-2">
           <DataTable
             columns={columns}
-            data={customers}
+            data={pagedCustomers}
             onAdd={handleAddCustomer}
             onEdit={handleEditCustomer}
             onDelete={handleDeleteCustomer}
             onSelect={(c: Customer) => setSelectedCustomer(c)}
           />
+          <SimplePager
+    page={pageSafe}
+    totalPages={totalPages}
+    onPageChange={setPage}
+  />
         </div>
 
         {/* Customer details card (parity with Suppliers) */}

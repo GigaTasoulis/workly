@@ -270,19 +270,21 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
 
   // Pagination
-const [page, setPage] = useState(1);
-const pageSize = 7;
-const totalPages = useMemo(
-  () => Math.max(1, Math.ceil((customers?.length ?? 0) / pageSize)),
-  [customers?.length]
-);
-const pageSafe = Math.min(Math.max(1, page), totalPages);
-useEffect(() => { if (page !== pageSafe) setPage(pageSafe); }, [pageSafe]);
+  const [page, setPage] = useState(1);
+  const pageSize = 7;
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil((customers?.length ?? 0) / pageSize)),
+    [customers?.length],
+  );
+  const pageSafe = Math.min(Math.max(1, page), totalPages);
+  useEffect(() => {
+    if (page !== pageSafe) setPage(pageSafe);
+  }, [pageSafe]);
 
-const pagedCustomers = useMemo(() => {
-  const start = (pageSafe - 1) * pageSize;
-  return customers.slice(start, start + pageSize);
-}, [customers, pageSafe]);
+  const pagedCustomers = useMemo(() => {
+    const start = (pageSafe - 1) * pageSize;
+    return customers.slice(start, start + pageSize);
+  }, [customers, pageSafe]);
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
@@ -656,11 +658,7 @@ const pagedCustomers = useMemo(() => {
             onDelete={handleDeleteCustomer}
             onSelect={(c: Customer) => setSelectedCustomer(c)}
           />
-          <SimplePager
-    page={pageSafe}
-    totalPages={totalPages}
-    onPageChange={setPage}
-  />
+          <SimplePager page={pageSafe} totalPages={totalPages} onPageChange={setPage} />
         </div>
 
         {/* Customer details card (parity with Suppliers) */}

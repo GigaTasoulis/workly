@@ -4,8 +4,8 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 
 type SimplePagerProps = {
-  page: number;               // 1-based
-  totalPages: number;         // >= 1
+  page: number;
+  totalPages: number;
   onPageChange: (page: number) => void;
   className?: string;
 };

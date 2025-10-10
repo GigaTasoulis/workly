@@ -32,34 +32,47 @@ interface DataTableProps {
   onAdd: () => void;
   onEdit: (item: any) => void;
   onDelete: (id: string) => void;
-  onSelect?: (item: any) => void; // Make this prop optional
+  onSelect?: (item: any) => void;
+  searchTerm?: string;
+  onSearchChange?: (value: string) => void;
 }
 
-export function DataTable({ columns, data, onAdd, onEdit, onDelete, onSelect }: DataTableProps) {
-  const [searchTerm, setSearchTerm] = useState("");
+export function DataTable({
+  columns,
+  data,
+  onAdd,
+  onEdit,
+  onDelete,
+  onSelect,
+  searchTerm,
+  onSearchChange,
+}: DataTableProps) {
+  const isControlledSearch = typeof searchTerm === "string" && typeof onSearchChange === "function";
+
+  const [internalSearch, setInternalSearch] = useState("");
+  const term = isControlledSearch ? (searchTerm as string) : internalSearch;
+  const setTerm = isControlledSearch ? (onSearchChange as (v: string) => void) : setInternalSearch;
+
   const { toast } = useToast();
 
-  const filteredData = data.filter((item) => {
-    return columns.some((column) => {
-      const value = item[column.key];
-      return value && value.toString().toLowerCase().includes(searchTerm.toLowerCase());
-    });
-  });
+  const filteredData = isControlledSearch
+    ? data
+    : data.filter((item) =>
+        columns.some((column) => {
+          const value = item[column.key];
+          return value && value.toString().toLowerCase().includes(term.toLowerCase());
+        }),
+      );
 
   const handleDelete = (id: string) => {
     if (confirm("Are you sure you want to delete this item?")) {
       onDelete(id);
-      toast({
-        title: "Item deleted",
-        description: "The item has been successfully deleted.",
-      });
+      toast({ title: "Item deleted", description: "The item has been successfully deleted." });
     }
   };
 
   const handleRowClick = (item: any) => {
-    if (onSelect) {
-      onSelect(item);
-    }
+    if (onSelect) onSelect(item);
   };
 
   return (
@@ -71,8 +84,8 @@ export function DataTable({ columns, data, onAdd, onEdit, onDelete, onSelect }: 
             type="search"
             placeholder={t.search}
             className="pl-8"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            value={term}
+            onChange={(e) => setTerm(e.target.value)}
           />
         </div>
         <Button onClick={onAdd}>

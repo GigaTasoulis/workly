@@ -268,23 +268,48 @@ export default function CustomersPage() {
   const { toast } = useToast();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  // Pagination
-  const [page, setPage] = useState(1);
+  const filteredCustomers = useMemo(() => {
+    if (!searchTerm) return customers;
+    const q = searchTerm.toLowerCase();
+    return customers.filter((c) =>
+      [
+        c.name,
+        c.phone,
+        c.afm,
+        c.tractor,
+        c.email,
+        c.address,
+        c.contactPerson,
+        c.notes,
+        c.debt?.toString(),
+      ]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    );
+  }, [customers, searchTerm]);
+
   const pageSize = 7;
   const totalPages = useMemo(
-    () => Math.max(1, Math.ceil((customers?.length ?? 0) / pageSize)),
-    [customers?.length],
+    () => Math.max(1, Math.ceil(filteredCustomers.length / pageSize)), // <-- from filtered length
+    [filteredCustomers.length],
   );
+
+  const [page, setPage] = useState(1);
   const pageSafe = Math.min(Math.max(1, page), totalPages);
   useEffect(() => {
     if (page !== pageSafe) setPage(pageSafe);
   }, [pageSafe]);
 
+  useEffect(() => {
+    if (page !== 1) setPage(1);
+  }, [searchTerm]);
+
   const pagedCustomers = useMemo(() => {
     const start = (pageSafe - 1) * pageSize;
-    return customers.slice(start, start + pageSize);
-  }, [customers, pageSafe]);
+    return filteredCustomers.slice(start, start + pageSize); // <-- slice filtered list
+  }, [filteredCustomers, pageSafe]);
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
@@ -653,6 +678,8 @@ export default function CustomersPage() {
           <DataTable
             columns={columns}
             data={pagedCustomers}
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
             onAdd={handleAddCustomer}
             onEdit={handleEditCustomer}
             onDelete={handleDeleteCustomer}

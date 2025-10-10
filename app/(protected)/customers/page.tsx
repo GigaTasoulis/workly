@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { translations as t } from "@/lib/translations";
 import CustomerPaymentHistory from "@/components/customers/CustomerPaymentHistory";
-
+import SimplePager from "@/components/pagination/SimplePager";
 /* ---------------- Status helpers (UI <-> API) ---------------- */
 
 const STATUS_API = ["pending", "paid", "cancelled"] as const;
@@ -268,6 +268,49 @@ export default function CustomersPage() {
   const { toast } = useToast();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filteredCustomers = useMemo(() => {
+    if (!searchTerm) return customers;
+    const q = searchTerm.toLowerCase();
+    return customers.filter((c) =>
+      [
+        c.name,
+        c.phone,
+        c.afm,
+        c.tractor,
+        c.email,
+        c.address,
+        c.contactPerson,
+        c.notes,
+        c.debt?.toString(),
+      ]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    );
+  }, [customers, searchTerm]);
+
+  const pageSize = 7;
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredCustomers.length / pageSize)), // <-- from filtered length
+    [filteredCustomers.length],
+  );
+
+  const [page, setPage] = useState(1);
+  const pageSafe = Math.min(Math.max(1, page), totalPages);
+  useEffect(() => {
+    if (page !== pageSafe) setPage(pageSafe);
+  }, [pageSafe]);
+
+  useEffect(() => {
+    if (page !== 1) setPage(1);
+  }, [searchTerm]);
+
+  const pagedCustomers = useMemo(() => {
+    const start = (pageSafe - 1) * pageSize;
+    return filteredCustomers.slice(start, start + pageSize); // <-- slice filtered list
+  }, [filteredCustomers, pageSafe]);
+
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const [transactions, setTransactions] = useState<CustomerTransaction[]>([]);
@@ -634,12 +677,15 @@ export default function CustomersPage() {
         <div className="md:col-span-2">
           <DataTable
             columns={columns}
-            data={customers}
+            data={pagedCustomers}
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
             onAdd={handleAddCustomer}
             onEdit={handleEditCustomer}
             onDelete={handleDeleteCustomer}
             onSelect={(c: Customer) => setSelectedCustomer(c)}
           />
+          <SimplePager page={pageSafe} totalPages={totalPages} onPageChange={setPage} />
         </div>
 
         {/* Customer details card (parity with Suppliers) */}

@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import SupplierPaymentHistory from "@/components/suppliers/SupplierPaymentHistory";
+import SimplePager from "@/components/pagination/SimplePager";
 
 const STATUS_API = ["pending", "paid", "cancelled"] as const;
 type StatusApi = (typeof STATUS_API)[number];
@@ -416,6 +417,42 @@ export default function SuppliersPage() {
   // We'll augment supplier data with debt for display in DataTable if needed
   const suppliersWithDebt = suppliers; // debt already provided by API
 
+  const [supplierSearch, setSupplierSearch] = useState("");
+
+  const filteredSuppliers = useMemo(() => {
+    if (!supplierSearch) return suppliersWithDebt;
+    const q = supplierSearch.toLowerCase();
+    return suppliersWithDebt.filter((s) =>
+      [s.name, s.contactPerson, s.email, s.phone, s.address, s.notes, s.debt?.toString()]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    );
+  }, [suppliersWithDebt, supplierSearch]);
+
+  const supplierPageSize = 7;
+  const [supplierPage, setSupplierPage] = useState(1);
+
+  const supplierTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredSuppliers.length / supplierPageSize)),
+    [filteredSuppliers.length],
+  );
+  const supplierPageSafe = Math.min(Math.max(1, supplierPage), supplierTotalPages);
+
+  // keep page in bounds (e.g., when results shrink)
+  useEffect(() => {
+    if (supplierPage !== supplierPageSafe) setSupplierPage(supplierPageSafe);
+  }, [supplierPageSafe]);
+
+  // reset to page 1 on new searches
+  useEffect(() => {
+    if (supplierPage !== 1) setSupplierPage(1);
+  }, [supplierSearch]);
+
+  const pagedSuppliers = useMemo(() => {
+    const start = (supplierPageSafe - 1) * supplierPageSize;
+    return filteredSuppliers.slice(start, start + supplierPageSize);
+  }, [filteredSuppliers, supplierPageSafe]);
+
   // Open the Add Transaction dialog for the selected supplier
   const handleAddSupplierTransaction = () => {
     if (!selectedSupplier) return;
@@ -724,11 +761,18 @@ export default function SuppliersPage() {
         <div className="md:col-span-2">
           <DataTable
             columns={columns}
-            data={suppliersWithDebt}
+            data={pagedSuppliers}
+            searchTerm={supplierSearch}
+            onSearchChange={setSupplierSearch}
             onAdd={handleAddNew}
             onEdit={handleEdit}
             onDelete={handleDelete}
             onSelect={(supplier: Supplier) => setSelectedSupplier(supplier)}
+          />
+          <SimplePager
+            page={supplierPageSafe}
+            totalPages={supplierTotalPages}
+            onPageChange={setSupplierPage}
           />
         </div>
         <div>

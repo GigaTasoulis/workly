@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { DataTable } from "@/components/data-table";
 import {
   Dialog,
@@ -20,6 +20,7 @@ import { translations as t } from "@/lib/translations";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Building2, MapPin, Users, FileText } from "lucide-react";
+import SimplePager from "@/components/pagination/SimplePager";
 
 import {
   fetchWorkplaces,
@@ -47,6 +48,44 @@ export default function WorkplacesPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [selectedWorkplace, setSelectedWorkplace] = useState<Workplace | null>(null);
   const { toast } = useToast();
+
+  const [workplaceSearch, setWorkplaceSearch] = useState("");
+
+  // Filter by common fields
+  const filteredWorkplaces = useMemo(() => {
+    if (!workplaceSearch) return workplaces;
+    const q = workplaceSearch.toLowerCase();
+    return workplaces.filter((w) =>
+      [w.name, w.address, w.city, w.state, w.zipCode, w.capacity, w.notes]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    );
+  }, [workplaces, workplaceSearch]);
+
+  const workplacesPageSize = 12;
+  const [workplacesPage, setWorkplacesPage] = useState(1);
+
+  const workplacesTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredWorkplaces.length / workplacesPageSize)),
+    [filteredWorkplaces.length],
+  );
+
+  const workplacesPageSafe = Math.min(Math.max(1, workplacesPage), workplacesTotalPages);
+
+  // Keep page in bounds if results shrink
+  useEffect(() => {
+    if (workplacesPage !== workplacesPageSafe) setWorkplacesPage(workplacesPageSafe);
+  }, [workplacesPageSafe]);
+
+  // Reset to page 1 on new searches
+  useEffect(() => {
+    if (workplacesPage !== 1) setWorkplacesPage(1);
+  }, [workplaceSearch]);
+
+  const pagedWorkplaces = useMemo(() => {
+    const start = (workplacesPageSafe - 1) * workplacesPageSize;
+    return filteredWorkplaces.slice(start, start + workplacesPageSize);
+  }, [filteredWorkplaces, workplacesPageSafe, workplacesPageSize]);
 
   // columns unchanged
   const columns = [
@@ -169,13 +208,20 @@ export default function WorkplacesPage() {
         <div className="md:col-span-2">
           <DataTable
             columns={columns}
-            data={workplaces}
+            data={pagedWorkplaces}
+            searchTerm={workplaceSearch}
+            onSearchChange={setWorkplaceSearch}
             onAdd={handleAddNew}
             onEdit={handleEdit}
             onDelete={(id: string) => {
               if (confirm(t.confirmDelete)) handleDelete(id);
             }}
             onSelect={setSelectedWorkplace}
+          />
+          <SimplePager
+            page={workplacesPageSafe}
+            totalPages={workplacesTotalPages}
+            onPageChange={setWorkplacesPage}
           />
         </div>
 

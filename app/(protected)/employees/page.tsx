@@ -27,6 +27,7 @@ import { Briefcase, Mail, Phone, Building2, Calendar, FileText, Clock } from "lu
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translations as t } from "@/lib/translations";
+import SimplePager from "@/components/pagination/SimplePager";
 
 // ---------------- Types (UI) ----------------
 type UIWorkplace = { id: string; name: string; address?: string };
@@ -602,6 +603,41 @@ export default function EmployeesPage() {
     }));
   }, [employees, owedByEmployee]);
 
+  // --- Employees table: controlled search + paginate AFTER filtering ---
+  const [empSearchTerm, setEmpSearchTerm] = useState("");
+
+  const filteredEmployeesForTable = useMemo(() => {
+    if (!empSearchTerm) return employeesForTable;
+    const q = empSearchTerm.toLowerCase();
+    return employeesForTable.filter((e) =>
+      [e.firstName, e.lastName, e.email, e.phone, e.position, e.department, e.owed?.toString()]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    );
+  }, [employeesForTable, empSearchTerm]);
+
+  const empTablePageSize = 7;
+  const [empTablePage, setEmpTablePage] = useState(1);
+
+  const empTableTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredEmployeesForTable.length / empTablePageSize)),
+    [filteredEmployeesForTable.length],
+  );
+  const empTablePageSafe = Math.min(Math.max(1, empTablePage), empTableTotalPages);
+
+  useEffect(() => {
+    if (empTablePage !== empTablePageSafe) setEmpTablePage(empTablePageSafe);
+  }, [empTablePageSafe]); // keep page in bounds
+
+  useEffect(() => {
+    if (empTablePage !== 1) setEmpTablePage(1);
+  }, [empSearchTerm]); // reset to page 1 on new searches
+
+  const pagedEmployeesForTable = useMemo(() => {
+    const start = (empTablePageSafe - 1) * empTablePageSize;
+    return filteredEmployeesForTable.slice(start, start + empTablePageSize);
+  }, [filteredEmployeesForTable, empTablePageSafe]);
+
   const calculateTenure = (hireDate?: string) => {
     if (!hireDate) return t.notSpecified;
     const h = new Date(hireDate);
@@ -884,11 +920,18 @@ export default function EmployeesPage() {
         <div className="md:col-span-2">
           <DataTable
             columns={columns}
-            data={employeesForTable}
+            data={pagedEmployeesForTable}
+            searchTerm={empSearchTerm}
+            onSearchChange={setEmpSearchTerm}
             onAdd={handleAddNew}
             onEdit={handleEdit}
             onDelete={handleDelete}
             onSelect={(e: UIEmployee) => setSelectedEmployee(e)}
+          />
+          <SimplePager
+            page={empTablePageSafe}
+            totalPages={empTableTotalPages}
+            onPageChange={setEmpTablePage}
           />
         </div>
 

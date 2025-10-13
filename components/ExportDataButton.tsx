@@ -1,25 +1,14 @@
 "use client";
-
 import { Button } from "@/components/ui/button";
-import { getLocalData } from "@/lib/utils";
 
 export function ExportDataButton() {
-  const handleExport = () => {
-    const keys = [
-      "employees",
-      "customers",
-      "transactions",
-      "suppliers",
-      "workplaces",
-      "payments",
-      "worklogs",
-    ];
-    const data = {};
-    keys.forEach((key) => {
-      data[key] = getLocalData(key) || [];
-    });
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: "application/json" });
+  const handleExport = async () => {
+    const res = await fetch("/api/export", { method: "GET" });
+    if (!res.ok) {
+      console.error("Export failed:", await res.text());
+      return;
+    }
+    const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

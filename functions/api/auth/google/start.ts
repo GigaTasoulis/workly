@@ -1,6 +1,27 @@
 // functions/api/auth/google/start.ts
+import { checkRate, getClientIp } from "../../_utils/ratelimit";
+
 export async function onRequest({ request, env }: any) {
   const url = new URL(request.url);
+
+  // ---- Rate limit: 5/min + 50/hour per IP for OAuth start ----
+  const ip = getClientIp(request);
+
+  const perMinute = await checkRate(env, ["oauth_start", ip, "m"], 5, 60);
+  if (!perMinute.allowed) {
+    return new Response(JSON.stringify({ error: "rate_limited", retryAfter: perMinute.reset }), {
+      status: 429,
+      headers: { "content-type": "application/json", "Retry-After": String(perMinute.reset) },
+    });
+  }
+
+  const perHour = await checkRate(env, ["oauth_start", ip, "h"], 50, 3600);
+  if (!perHour.allowed) {
+    return new Response(JSON.stringify({ error: "rate_limited", retryAfter: perHour.reset }), {
+      status: 429,
+      headers: { "content-type": "application/json", "Retry-After": String(perHour.reset) },
+    });
+  }
 
   const clientId = env.GOOGLE_CLIENT_ID;
   if (!clientId) return json({ error: "Missing GOOGLE_CLIENT_ID" }, 500);

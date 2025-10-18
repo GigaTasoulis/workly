@@ -20,8 +20,10 @@ type SidebarProps = {
 export function Sidebar({ isOpen, onOpenChange }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const [busy, setBusy] = useState(false);
+
+  const ownerId = user?.id ?? "";
 
   const routes = [
     { name: t.dashboard, path: "/", icon: <LayoutDashboard className="h-5 w-5" /> },
@@ -31,7 +33,6 @@ export function Sidebar({ isOpen, onOpenChange }: SidebarProps) {
     { name: t.employees, path: "/employees", icon: <Briefcase className="h-5 w-5" /> },
   ];
 
-  // Close drawer on route change (mobile)
   useEffect(() => {
     onOpenChange(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -39,7 +40,6 @@ export function Sidebar({ isOpen, onOpenChange }: SidebarProps) {
 
   return (
     <>
-      {/* Overlay only under 1100px */}
       <div
         className={cn(
           "fixed inset-0 z-40 bg-black/60 min-[1100px]:hidden",
@@ -48,12 +48,10 @@ export function Sidebar({ isOpen, onOpenChange }: SidebarProps) {
         onClick={() => onOpenChange(false)}
       />
 
-      {/* Drawer (≤1100px) / Fixed sidebar (>1100px) */}
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex w-64 transform flex-col border-r bg-white transition-transform duration-200 ease-in-out dark:bg-gray-950",
           isOpen ? "translate-x-0" : "-translate-x-full",
-          // Switch to static, always-visible at >1100px
           "min-[1100px]:static min-[1100px]:w-64 min-[1100px]:translate-x-0",
         )}
       >
@@ -61,7 +59,6 @@ export function Sidebar({ isOpen, onOpenChange }: SidebarProps) {
           <Link href="/" className="flex items-center">
             <span className="text-xl font-bold">Work-ly</span>
           </Link>
-          {/* Hide the close button above 1100px */}
           <Button
             variant="ghost"
             size="icon"
@@ -99,10 +96,10 @@ export function Sidebar({ isOpen, onOpenChange }: SidebarProps) {
           <ThemeToggleButton />
         </div>
         <div className="p-4">
-          <ExportDataButton />
+          <ExportDataButton ownerId={ownerId} />
         </div>
         <div className="p-4">
-          <ImportDataButton />
+          <ImportDataButton ownerId={ownerId} />
         </div>
 
         <div className="mt-auto p-4">

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import ThemeToggleButton from "@/components/ThemeToggleButton";
 
-function MobileTopBar({ onMenu }: { onMenu: () => void }) {
+function MobileTopBar({ onMenu, userId }: { onMenu: () => void; userId?: string }) {
   return (
     <div className="sticky top-0 z-40 border-b bg-gray-50/80 backdrop-blur supports-[backdrop-filter]:bg-gray-50/60 dark:bg-gray-900/80 min-[1100px]:hidden">
       <div className="flex items-center justify-between px-4 py-3">
@@ -16,7 +16,7 @@ function MobileTopBar({ onMenu }: { onMenu: () => void }) {
           <Menu className="h-5 w-5" />
         </Button>
         <span className="text-base font-semibold">Work-ly</span>
-        <ThemeToggleButton />
+        <ThemeToggleButton userId={userId} />
       </div>
     </div>
   );
@@ -66,7 +66,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       {user && <Sidebar isOpen={sidebarOpen} onOpenChange={setSidebarOpen} />}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {user && <MobileTopBar onMenu={() => setSidebarOpen(true)} />}
+        {user && <MobileTopBar userId={user.id} onMenu={() => setSidebarOpen(true)} />}
         <main className="flex-1 overflow-y-auto p-4 min-[1100px]:p-6">{children}</main>
       </div>
     </div>

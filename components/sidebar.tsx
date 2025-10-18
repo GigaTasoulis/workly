@@ -20,7 +20,7 @@ type SidebarProps = {
 export function Sidebar({ isOpen, onOpenChange }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const [busy, setBusy] = useState(false);
 
   const routes = [
@@ -96,7 +96,7 @@ export function Sidebar({ isOpen, onOpenChange }: SidebarProps) {
         </nav>
 
         <div className="p-4">
-          <ThemeToggleButton />
+          <ThemeToggleButton userId={user?.id} />
         </div>
         <div className="p-4">
           <ExportDataButton />

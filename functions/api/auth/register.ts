@@ -43,34 +43,40 @@ function corsHeaders(origin: string | null) {
   return h;
 }
 
-async function bumpAndCheckRateLimit(env: any, ip: string, maxPerMinute = 10) {
-  await env.DB.exec?.(`CREATE TABLE IF NOT EXISTS auth_rate_limits(
-    ip TEXT NOT NULL,
-    bucket INTEGER NOT NULL,
-    count INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (ip, bucket)
-  )`);
+// --- KV-based rate limiting helpers ---
+function ipFrom(req: Request) {
+  const h = req.headers;
+  const ip =
+    h.get("CF-Connecting-IP") ||
+    (h.get("x-forwarded-for") || "").split(",")[0].trim() ||
+    "";
+  return ip || "unknown";
+}
 
-  const now = Math.floor(Date.now() / 1000);
-  const bucket = Math.floor(now / 60); // minute bucket
+type KV = {
+  get: (key: string) => Promise<string | null>;
+  put: (key: string, value: string, opts?: { expirationTtl?: number }) => Promise<void>;
+};
 
-  const row = (await env.DB.prepare(
-    "SELECT count FROM auth_rate_limits WHERE ip = ? AND bucket = ?",
-  )
-    .bind(ip, bucket)
-    .first()) as { count: number } | null;
+async function kvWindowLimit(
+  kv: KV,
+  key: string,
+  limit: number,
+  windowSec: number,
+): Promise<{ ok: boolean; retryAfterSec: number }> {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const bucket = Math.floor(nowSec / windowSec);
+  const storageKey = `rl:${key}:${bucket}`;
+  const v = await kv.get(storageKey);
+  const count = v ? parseInt(v, 10) || 0 : 0;
 
-  const current = row?.count ?? 0;
-  if (current >= maxPerMinute) return false;
+  if (count >= limit) {
+    const resetAt = (bucket + 1) * windowSec;
+    return { ok: false, retryAfterSec: Math.max(1, resetAt - nowSec) };
+  }
 
-  await env.DB.prepare(
-    "INSERT INTO auth_rate_limits(ip,bucket,count) VALUES(?, ?, 1) " +
-      "ON CONFLICT(ip,bucket) DO UPDATE SET count = count + 1",
-  )
-    .bind(ip, bucket)
-    .run();
-
-  return true;
+  await kv.put(storageKey, String(count + 1), { expirationTtl: windowSec + 5 });
+  return { ok: true, retryAfterSec: 0 };
 }
 
 /* ------------------------------ handler ------------------------------ */
@@ -92,6 +98,35 @@ export async function onRequest(context: any) {
 
     if (request.method !== "POST") {
       return json({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    // ---- KV rate limit: 2/min AND 5/hour per IP on register ----
+    const ip = ipFrom(request);
+    const kv: KV | undefined = env.RATELIMIT;
+    if (kv) {
+      const minute = await kvWindowLimit(kv, `register:${ip}:m`, 2, 60);
+      if (!minute.ok) {
+        const h2 = corsHeaders(origin);
+        h2.set("Retry-After", String(minute.retryAfterSec));
+        h2.set("Content-Type", "application/json");
+        return new Response(
+          JSON.stringify({ error: "rate_limited", retryAfter: minute.retryAfterSec }),
+          { status: 429, headers: h2 },
+        );
+      }
+      const hour = await kvWindowLimit(kv, `register:${ip}:h`, 5, 3600);
+      if (!hour.ok) {
+        const h2 = corsHeaders(origin);
+        h2.set("Retry-After", String(hour.retryAfterSec));
+        h2.set("Content-Type", "application/json");
+        return new Response(
+          JSON.stringify({ error: "rate_limited", retryAfter: hour.retryAfterSec }),
+          { status: 429, headers: h2 },
+        );
+      }
+    } else {
+      // Optional: keep or remove this log
+      console.warn("RATELIMIT KV not bound; skipping register limiter");
     }
 
     let body: any = {};

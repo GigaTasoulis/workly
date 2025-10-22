@@ -1,4 +1,5 @@
 import { compare } from "bcryptjs";
+import { checkRate, getClientIp } from "../_utils/ratelimit";
 
 function json(data: unknown, init: ResponseInit = {}) {
   const h = new Headers(init.headers || {});
@@ -59,6 +60,18 @@ export async function onRequest(context: any) {
 
   if (request.method !== "POST") {
     return json({ error: "Method not allowed" }, { status: 405 });
+  }
+
+  const ip = getClientIp(request);
+  const rate = await checkRate(env, ["login", ip], 10, 60); // 10 req / 60s per IP
+  if (!rate.allowed) {
+    const h = corsHeaders(origin);
+    h.set("Retry-After", String(rate.reset));
+    h.set("Content-Type", "application/json");
+    return new Response(JSON.stringify({ error: "rate_limited", retryAfter: rate.reset }), {
+      status: 429,
+      headers: h,
+    });
   }
 
   let body: any = {};

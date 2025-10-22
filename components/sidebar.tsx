@@ -93,7 +93,7 @@ export function Sidebar({ isOpen, onOpenChange }: SidebarProps) {
         </nav>
 
         <div className="p-4">
-          <ThemeToggleButton />
+          <ThemeToggleButton userId={user?.id} />
         </div>
         <div className="p-4">
           <ExportDataButton ownerId={ownerId} />

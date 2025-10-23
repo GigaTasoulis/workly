@@ -180,28 +180,80 @@ export default function SuppliersPage() {
   );
   const pendingCount = pendingTxsForSelected.length;
 
-  function exportSelectedTransactionsCSV() {
+  async function exportSelectedTransactionsCSV() {
     if (!selectedSupplier) return;
 
-    const rows = supplierTransactions.filter((t) => t.supplierId === selectedSupplier.id);
-    const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+    const supplierId = selectedSupplier.id;
 
-    const header = ["Date", "Product", "Amount", "Paid", "Status", "Notes"].map(esc).join(",");
+    // 1) Debts (from current state)
+    const debtRows = supplierTransactions
+      .filter((t) => t.supplierId === supplierId)
+      .map((t) => ({
+        date: t.date,
+        type: "Οφειλή",
+        product: t.productName || "",
+        amount: Number(t.amount) || 0,
+        notes: t.notes || "",
+        created_at: t.created_at ? Number(t.created_at) : undefined,
+      }));
 
-    const body = rows
-      .map((r) =>
-        [r.date, r.productName, r.amount, r.amountPaid, r.status, r.notes].map(esc).join(","),
-      )
+    // 2) Payments (from API)
+    let paymentRows: Array<{
+      date: string;
+      type: string;
+      product: string;
+      amount: number;
+      notes: string;
+      created_at?: number;
+    }> = [];
+
+    try {
+      const res = await fetch(
+        `/api/supplier-payments?supplierId=${encodeURIComponent(supplierId)}`,
+        { credentials: "include" },
+      );
+      const j = await res.json();
+      if (res.ok) {
+        const list = Array.isArray(j?.payments) ? j.payments : [];
+        paymentRows = list.map((p: any) => ({
+          date: String(p.date),
+          type: "Πληρωμή",
+          product: String(p.product_name ?? ""),
+          amount: Number(p.amount) || 0,
+          notes: String(p.notes ?? ""),
+          created_at: p.created_at ? Number(p.created_at) : undefined,
+        }));
+      } else {
+        console.error(j?.error || "Failed to load supplier payments");
+      }
+    } catch (e) {
+      console.error("Supplier payments fetch failed:", e);
+    }
+
+    // 3) Merge & sort (newest first; tie-break by created_at)
+    const ledger = [...debtRows, ...paymentRows].sort((a, b) => {
+      const dt = new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (dt !== 0) return dt;
+      return (b.created_at || 0) - (a.created_at || 0);
+    });
+
+    // 4) CSV (Ημ/νία, Τύπος, Προϊόν, Ποσό, Σημειώσεις) with UTF-8 BOM
+    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const header = ["Ημ/νία", "Τύπος", "Προϊόν", "Ποσό", "Σημειώσεις"].map(esc).join(",");
+    const body = ledger
+      .map((r) => {
+        const safeNotes = String(r.notes ?? "").replace(/\r?\n/g, " ");
+        return [r.date, r.type, r.product, r.amount, safeNotes].map(esc).join(",");
+      })
       .join("\r\n");
 
-    const csv = `${header}\n${body}`;
+    const csv = body ? `${header}\r\n${body}` : header;
+    const BOM = "\uFEFF";
+    const blob = new Blob([BOM, csv], { type: "text/csv;charset=utf-8;" });
 
-    const BOM = "\uFEFF"; // <-- UTF-8 BOM so Excel reads as UTF-8
-
-    const blob = new Blob([BOM, csv], { type: "text/csv;charset=utf-8;" }); 
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `supplier-${selectedSupplier.name}-transactions.csv`;
+    a.download = `supplier-${selectedSupplier.name}-history.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   }

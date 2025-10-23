@@ -192,11 +192,13 @@ export default function SuppliersPage() {
       .map((r) =>
         [r.date, r.productName, r.amount, r.amountPaid, r.status, r.notes].map(esc).join(","),
       )
-      .join("\n");
+      .join("\r\n");
 
     const csv = `${header}\n${body}`;
 
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const BOM = "\uFEFF"; // <-- UTF-8 BOM so Excel reads as UTF-8
+
+    const blob = new Blob([BOM, csv], { type: "text/csv;charset=utf-8;" }); 
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `supplier-${selectedSupplier.name}-transactions.csv`;

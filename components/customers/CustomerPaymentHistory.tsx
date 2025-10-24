@@ -30,6 +30,7 @@ export default function CustomerPaymentHistory({
   pageSize = 10,
 }: Props) {
   const { toast } = useToast();
+  const [rowsAll, setRowsAll] = useState<PaymentRow[]>([]);
   const [rows, setRows] = useState<PaymentRow[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [page, setPage] = useState<number>(1);
@@ -42,52 +43,106 @@ export default function CustomerPaymentHistory({
     [],
   );
 
-  async function fetchPage(p: number) {
+  // Reset to page 1 when customer changes
+  useEffect(() => {
+    setPage(1);
+  }, [customerId]);
+
+  // Fetch payments + debts, merge and sort (newest first)
+  async function fetchAll() {
     if (!customerId) return;
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
     setLoading(true);
     setError(null);
+
     try {
-      const limit = pageSize;
-      const offset = (p - 1) * pageSize;
-      const res = await fetch(
-        `/api/customer-payments?customer_id=${encodeURIComponent(customerId)}&limit=${limit}&offset=${offset}`,
+      const paymentsReq = fetch(
+        `/api/customer-payments?customer_id=${encodeURIComponent(customerId)}`,
         { credentials: "include", signal: ac.signal },
       );
-      const j = await res.json();
-      if (!res.ok) throw new Error(j?.error || "Αποτυχία φόρτωσης ιστορικού πληρωμών");
+      const debtsReq = fetch(
+        `/api/customer-transactions?customer_id=${encodeURIComponent(customerId)}`,
+        { credentials: "include", signal: ac.signal },
+      );
 
-      const list: PaymentRow[] = Array.isArray(j?.payments) ? j.payments : [];
-      const totalFromApi = typeof j?.total === "number" ? j.total : list.length;
+      const [paymentsRes, debtsRes] = await Promise.all([paymentsReq, debtsReq]);
 
-      setRows(list);
-      setTotal(totalFromApi);
+      const paymentsJson = await paymentsRes.json();
+      const debtsJson = await debtsRes.json();
+
+      if (!paymentsRes.ok) throw new Error(paymentsJson?.error || "Αποτυχία φόρτωσης πληρωμών");
+      if (!debtsRes.ok) throw new Error(debtsJson?.error || "Αποτυχία φόρτωσης οφειλών");
+
+      const payments: PaymentRow[] = (Array.isArray(paymentsJson?.payments)
+        ? paymentsJson.payments
+        : []
+      ).map((p: any) => ({
+        id: `pay:${p.id}`,
+        user_id: p.user_id,
+        customer_id: p.customer_id,
+        transaction_id: p.transaction_id,
+        amount: Number(p.amount) || 0,
+        date: p.date,
+        notes: p.notes || "",
+        type: "payment",
+        created_at: p.created_at ? Number(p.created_at) : undefined,
+      }));
+
+      const debts: PaymentRow[] = (Array.isArray(debtsJson?.transactions)
+        ? debtsJson.transactions
+        : []
+      ).map((t: any) => ({
+        id: `tx:${t.id}`,
+        user_id: t.user_id,
+        customer_id: t.customer_id,
+        transaction_id: t.id,
+        amount: Number(t.amount) || 0,
+        date: t.date,
+        notes: t.notes || "",
+        type: "debt",
+        created_at: t.created_at ? Number(t.created_at) : undefined,
+      }));
+
+      const merged = [...payments, ...debts].sort((a, b) => {
+        const dt = new Date(b.date).getTime() - new Date(a.date).getTime();
+        if (dt !== 0) return dt;
+        return (b.created_at || 0) - (a.created_at || 0);
+      });
+
+      setRowsAll(merged);
+      setTotal(merged.length);
+
+      // initial slice for current page (likely 1)
+      const start = (page - 1) * pageSize;
+      setRows(merged.slice(start, start + pageSize));
     } catch (e: any) {
       if (!ac.signal.aborted) {
-        setError(e?.message || "Αποτυχία φόρτωσης ιστορικού πληρωμών");
-        toast({
-          title: "Σφάλμα",
-          description: e?.message || "Αποτυχία φόρτωσης ιστορικού πληρωμών.",
-          variant: "destructive",
-        });
+        const msg = e?.message || "Αποτυχία φόρτωσης ιστορικού πελάτη";
+        setError(msg);
+        toast({ title: "Σφάλμα", description: msg, variant: "destructive" });
       }
     } finally {
       setLoading(false);
     }
   }
 
-  // reset to page 1 when customer changes
+  // Fetch when customer, refresh key, or page size changes
   useEffect(() => {
-    setPage(1);
-  }, [customerId]);
-
-  // fetch on page/customer/refresh change
-  useEffect(() => {
-    if (customerId) fetchPage(page);
+    if (customerId) fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customerId, page, refreshKey, pageSize]);
+  }, [customerId, refreshKey, pageSize]);
+
+  // Re-slice when page, pageSize, or data changes
+  useEffect(() => {
+    if (!rowsAll.length) {
+      setRows([]);
+      return;
+    }
+    const start = (page - 1) * pageSize;
+    setRows(rowsAll.slice(start, start + pageSize));
+  }, [rowsAll, page, pageSize]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -96,7 +151,7 @@ export default function CustomerPaymentHistory({
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div>
-            <CardTitle>Ιστορικό Πληρωμών</CardTitle>
+            <CardTitle>Ιστορικό Πελάτη</CardTitle>
             <CardDescription>Εμφανίζονται κινήσεις για τον επιλεγμένο πελάτη.</CardDescription>
           </div>
           <Badge variant="outline" className="ml-2">
@@ -108,7 +163,7 @@ export default function CustomerPaymentHistory({
       <CardContent>
         {!customerId ? (
           <p className="text-sm text-muted-foreground">
-            Επιλέξτε πελάτη για να δείτε το ιστορικό πληρωμών.
+            Επιλέξτε πελάτη για να δείτε το ιστορικό πελάτη.
           </p>
         ) : loading ? (
           <div className="space-y-2">
@@ -186,7 +241,7 @@ function renderTypeBadge(type?: string) {
   const t = (type || "payment") as "payment" | "debt" | string;
   if (t === "debt") {
     return (
-      <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100">
+      <Badge className="bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100">
         Οφειλή
       </Badge>
     );

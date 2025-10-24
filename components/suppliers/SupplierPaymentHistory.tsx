@@ -17,7 +17,7 @@ type HistoryRow = {
   supplierName?: string;
   transactionId?: string;
   productName?: string;
-  type?: "payment" | "debt"; // optional; if your API returns it
+  type?: "payment" | "debt";
   amount: number;
   date: string; // YYYY-MM-DD
   notes?: string;
@@ -54,7 +54,7 @@ export default function SupplierPaymentHistory({
         const data = await r.json();
         const map: Record<string, string> = {};
         for (const s of data.suppliers || []) {
-          map[s.id] = s.name;
+          map[String(s.id)] = String(s.name);
         }
         if (!cancelled) setSupplierNameById(map);
       } catch {}
@@ -64,34 +64,64 @@ export default function SupplierPaymentHistory({
     };
   }, []);
 
-  // fetch payments/debts history (optionally for a single supplier)
+  // fetch payments + debts, merge and sort
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     (async () => {
       try {
+        // Build query once
         const qs = new URLSearchParams();
         if (supplierId) qs.set("supplierId", supplierId);
-        const url = `/api/supplier-payments${qs.toString() ? `?${qs}` : ""}`;
-        const r = await fetch(url, { credentials: "include", cache: "no-store" });
-        const j = await r.json();
 
-        if (!r.ok) throw new Error(j?.error || "Failed to load history");
+        // 1) Payments
+        const payUrl = `/api/supplier-payments${qs.toString() ? `?${qs}` : ""}`;
+        const payRes = await fetch(payUrl, { credentials: "include", cache: "no-store" });
+        const payJson = await payRes.json();
+        if (!payRes.ok) throw new Error(payJson?.error || "Failed to load payments");
 
-        const list: any[] = j.payments || [];
-        const mapped: HistoryRow[] = list.map((p) => ({
+        const paymentList: any[] = payJson.payments || [];
+        const payments: HistoryRow[] = paymentList.map((p) => ({
           id: String(p.id),
-          supplierId: String(p.supplier_id),
-          supplierName: String(p.supplier_name || ""), // if your API includes it
+          supplierId: String(p.supplier_id ?? p.supplierId),
+          supplierName: p.supplier_name ? String(p.supplier_name) : undefined,
           transactionId: p.transaction_id ? String(p.transaction_id) : undefined,
           productName: p.product_name ? String(p.product_name) : undefined,
-          type: p.type === "payment" || p.type === "debt" ? p.type : undefined,
+          type: "payment",
           amount: Number(p.amount) || 0,
           date: String(p.date),
-          notes: String(p.notes || ""),
+          notes: p.notes != null ? String(p.notes) : "",
         }));
+
+        // 2) Debts (supplier transactions)
+        // NOTE: If your API uses a different endpoint or parameter (e.g., supplier_id),
+        // adjust the URL/param below accordingly.
+        const debtUrl = `/api/supplier-transactions${qs.toString() ? `?${qs}` : ""}`;
+        const debtRes = await fetch(debtUrl, { credentials: "include", cache: "no-store" });
+        const debtJson = await debtRes.json();
+        if (!debtRes.ok) throw new Error(debtJson?.error || "Failed to load debts");
+
+        const debtList: any[] = debtJson.transactions || debtJson.debts || [];
+        const debts: HistoryRow[] = debtList.map((t) => ({
+          id: `tx:${String(t.id)}`,
+          supplierId: String(t.supplier_id ?? t.supplierId),
+          supplierName: t.supplier_name ? String(t.supplier_name) : undefined,
+          transactionId: String(t.id),
+          productName: t.product_name ? String(t.product_name) : undefined,
+          type: "debt",
+          amount: Number(t.amount) || 0,
+          date: String(t.date),
+          notes: t.notes != null ? String(t.notes) : "",
+        }));
+
+        // 3) Merge & sort
+        const merged = [...payments, ...debts].sort((a, b) => {
+          const dt = new Date(b.date).getTime() - new Date(a.date).getTime();
+          return sortOrder === "desc" ? dt : -dt;
+        });
+
         if (!cancelled) {
-          setRows(mapped);
+          setRows(merged);
           setPage(1); // reset to first page on reload
         }
       } catch (e) {
@@ -101,12 +131,14 @@ export default function SupplierPaymentHistory({
         if (!cancelled) setLoading(false);
       }
     })();
+
     return () => {
       cancelled = true;
     };
-  }, [supplierId, refreshKey]);
+    // include sortOrder so refetch resort respects current choice
+  }, [supplierId, refreshKey, sortOrder]);
 
-  // delete a row (undo payment/debt)
+  // delete a **payment** row (we do NOT delete debts here)
   const handleDelete = async (id: string) => {
     if (!confirm("Να διαγραφεί αυτή η κίνηση;")) return;
     try {
@@ -124,27 +156,32 @@ export default function SupplierPaymentHistory({
     }
   };
 
-  // derived: search + sort
+  // derived: search + sort (client-side)
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     let list = rows.slice();
+
     if (term) {
       list = list.filter((r) =>
         [
           r.supplierName || supplierNameById[r.supplierId] || "Unknown",
           r.productName || "",
           r.notes || "",
+          r.type === "payment" ? "πληρωμή" : r.type === "debt" ? "οφειλή" : "",
         ]
           .join(" ")
           .toLowerCase()
           .includes(term),
       );
     }
+
+    // ensure current sort order is applied even if upstream fetch didn't run
     list.sort((a, b) =>
       sortOrder === "desc"
         ? new Date(b.date).getTime() - new Date(a.date).getTime()
         : new Date(a.date).getTime() - new Date(b.date).getTime(),
     );
+
     return list;
   }, [rows, search, sortOrder, supplierNameById]);
 
@@ -161,7 +198,7 @@ export default function SupplierPaymentHistory({
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold tracking-tight">Ιστορικό Πληρωμών</h2>
+      <h2 className="text-2xl font-bold tracking-tight">Ιστορικό Προμηθευτή</h2>
 
       <div className="mb-4 flex gap-4">
         {/* Sort order */}
@@ -184,7 +221,7 @@ export default function SupplierPaymentHistory({
         {/* Search */}
         <Input
           className="w-full md:max-w-sm"
-          placeholder="Αναζήτηση προμηθευτή/προϊόντος..."
+          placeholder="Αναζήτηση προμηθευτή/προϊόντος/σημειώσεων..."
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
@@ -258,14 +295,16 @@ export default function SupplierPaymentHistory({
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm">
                       <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleDelete(r.id)}
-                          title="Διαγραφή"
-                        >
-                          Διαγραφή
-                        </Button>
+                        {r.type === "payment" && (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleDelete(r.id)}
+                            title="Διαγραφή"
+                          >
+                            Διαγραφή
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

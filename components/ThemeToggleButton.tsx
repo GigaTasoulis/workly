@@ -1,40 +1,34 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 
-const MoonIcon = dynamic(() => import("lucide-react").then((mod) => mod.Moon), {
-  ssr: false,
-});
-const SunIcon = dynamic(() => import("lucide-react").then((mod) => mod.Sun), {
-  ssr: false,
-});
+const MoonIcon = dynamic(() => import("lucide-react").then((m) => m.Moon), { ssr: false });
+const SunIcon = dynamic(() => import("lucide-react").then((m) => m.Sun), { ssr: false });
 
-export default function ThemeToggleButton() {
+type Props = { userId?: string };
+
+export default function ThemeToggleButton({ userId }: Props) {
+  const storageKey = useMemo(() => (userId ? `theme:${userId}` : "theme:anon"), [userId]);
+
   const [theme, setTheme] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("theme") || "light";
-    }
-    return "light";
+    if (typeof window === "undefined") return "light";
+    return localStorage.getItem(storageKey) || "light";
   });
 
   useEffect(() => {
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-    localStorage.setItem("theme", theme);
-  }, [theme]);
+    const isDark = theme === "dark";
+    document.documentElement.classList.toggle("dark", isDark);
+    localStorage.setItem(storageKey, theme);
 
-  const toggleTheme = () => {
-    setTheme(theme === "light" ? "dark" : "light");
-  };
+    document.cookie = `theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax`;
+  }, [theme, storageKey]);
 
   return (
     <button
-      onClick={toggleTheme}
+      onClick={() => setTheme(theme === "light" ? "dark" : "light")}
       className="flex items-center justify-center rounded-md p-2 hover:bg-gray-200 dark:hover:bg-gray-800"
+      aria-label="Toggle theme"
     >
       {theme === "light" ? <MoonIcon className="h-5 w-5" /> : <SunIcon className="h-5 w-5" />}
     </button>

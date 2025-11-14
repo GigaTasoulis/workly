@@ -1,14 +1,23 @@
 name = "workly"
-pages_build_output_dir = "out"   # ← adjust to your framework’s output dir
+pages_build_output_dir = "out"
 
 compatibility_date = "2025-08-10"
 compatibility_flags = ["nodejs_compat"]
 
+[[kv_namespaces]]
+binding = "RATELIMIT"
+id = "586be3c3b8b44f418d613d602233a3f9"     # workly-dev-ratelimit
+
 [env.preview]
 [[env.preview.d1_databases]]
-binding = "DB"                                   # <-- must be exactly DB
+binding = "DB"
 database_name = "workly-preview"
 database_id = "1e0adb30-5b71-428b-8ed8-fee66494c303"
+
+[[env.preview.kv_namespaces]]
+binding = "RATELIMIT"
+id = "a85e262b736c45e5896c8f7cc355debe"
+
 
 # PRODUCTION
 [env.production]

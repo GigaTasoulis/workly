@@ -646,20 +646,75 @@ export default function CustomersPage() {
   };
 
   /* ---------- CSV export ---------- */
-  function exportSelectedTransactionsCSV() {
+  async function exportSelectedTransactionsCSV() {
     if (!selectedCustomer) return;
-    const rows = transactions.filter((t) => t.customerId === selectedCustomer.id);
-    const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-    const header = ["Date", "Product", "Amount", "Paid", "Status", "Notes"].map(esc).join(",");
-    const body = rows
-      .map((r) =>
-        [r.date, r.productName, r.amount, r.amountPaid, r.status, r.notes].map(esc).join(","),
-      )
-      .join("\n");
-    const blob = new Blob([`${header}\n${body}`], { type: "text/csv;charset=utf-8;" });
+
+    // 1) Debts from current state
+    const debtRows = transactions
+      .filter((t) => t.customerId === selectedCustomer.id)
+      .map((t) => ({
+        date: t.date,
+        amount: Number(t.amount) || 0,
+        type: "Οφειλή",
+        notes: t.notes || "",
+        created_at: undefined as number | undefined,
+      }));
+
+    // 2) Payments from API
+    let paymentRows: Array<{
+      date: string;
+      amount: number;
+      type: string;
+      notes: string;
+      created_at?: number;
+    }> = [];
+
+    try {
+      const res = await fetch(
+        `/api/customer-payments?customer_id=${encodeURIComponent(selectedCustomer.id)}`,
+        { credentials: "include" },
+      );
+      const j = await res.json();
+      if (res.ok) {
+        const list = Array.isArray(j?.payments) ? j.payments : [];
+        paymentRows = list.map((p: any) => ({
+          date: p.date,
+          amount: Number(p.amount) || 0,
+          type: "Είσπραξη",
+          notes: p.notes || "",
+          created_at: p.created_at ? Number(p.created_at) : undefined,
+        }));
+      } else {
+        console.error(j?.error || "Failed to load payments");
+      }
+    } catch (e) {
+      console.error("Payments fetch failed:", e);
+    }
+
+    // 3) Merge & sort like the UI (newest first)
+    const ledger = [...debtRows, ...paymentRows].sort((a, b) => {
+      const dt = new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (dt !== 0) return dt;
+      return (b.created_at || 0) - (a.created_at || 0);
+    });
+
+    // 4) CSV (Date, Amount, Type, Notes), escape & keep Greek via BOM
+    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const header = ["Ημ/νία", "Ποσό", "Τύπος", "Σημειώσεις"].map(esc).join(",");
+    const body = ledger
+      .map((r) => {
+        const safeNotes = String(r.notes ?? "").replace(/\r?\n/g, " ");
+        return [r.date, r.amount, r.type, safeNotes].map(esc).join(",");
+      })
+      .join("\r\n");
+
+    const BOM = "\uFEFF";
+    const csv = `${header}\r\n${body}`;
+    const blob = new Blob([BOM, csv], { type: "text/csv;charset=utf-8;" });
+
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `customer-${selectedCustomer.name}-transactions.csv`;
+    a.download = `customer-${selectedCustomer.name}-history.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   }

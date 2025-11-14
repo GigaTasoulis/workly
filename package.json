@@ -79,7 +79,7 @@
     "embla-carousel-react": "8.5.1",
     "express": "^4.21.2",
     "framer-motion": "^12.7.4",
-    "hono": "^4.9.7",
+    "hono": "^4.10.2",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
     "next": "14.2.32",
@@ -98,7 +98,7 @@
   },
   "devDependencies": {
     "@cloudflare/next-on-pages": "^1.13.13",
-    "@cloudflare/workers-types": "^4.20250924.0",
+    "@cloudflare/workers-types": "^4.20251011.0",
     "@types/node": "^22",
     "@types/react": "^18",
     "@types/react-dom": "^18",

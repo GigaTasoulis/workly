@@ -26,8 +26,13 @@ binding = "DB"                         # MUST be exactly DB
 database_name = "workly-prod"
 database_id = "21f7f0de-88d7-4db2-acb7-11638ca2461d"
 
+[[env.production.kv_namespaces]]
+binding = "RATELIMIT"
+id = "4e55a80dbc5b4e838d2ca560f96f1cbe"  
+
 # Local dev binding used by `wrangler pages dev ...`
 [[d1_databases]]
 binding = "DB"                                   # must be exactly DB
 database_name = "workly-dev"
 database_id = "6646ce60-77d2-4671-b513-84518736a005"
+

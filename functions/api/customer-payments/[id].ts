@@ -54,12 +54,72 @@ export async function onRequest({ request, env, params }: any) {
     return json({ payment: row }, 200, cors());
   }
 
-  // Only allow editing "metadata": date, notes
+  // EDIT payment: allow amount, date, notes
+  // If amount changes, adjust linked transaction.amount_paid + status
   if (method === "PUT" || method === "PATCH") {
     const b = await safeJson(request);
+
+    // Ensure payment exists and get current amount + linked transaction id
+    const pay = await env.DB.prepare(
+      `SELECT id, transaction_id, payment_amount
+         FROM customer_payments
+        WHERE user_id = ? AND id = ?`,
+    )
+      .bind(user.user_id, id)
+      .first();
+    if (!pay) return json({ error: "Not found" }, 404, cors());
+
     const sets: string[] = [];
     const vals: any[] = [];
 
+    let newTxPaid: number | null = null;
+    let newTxStatus: string | null = null;
+
+    // --- amount (payment_amount) ---
+    if (b?.amount !== undefined) {
+      const newAmount = Number(b.amount) || 0;
+      if (newAmount <= 0) {
+        return json({ error: "amount must be > 0" }, 400, cors());
+      }
+
+      // Load linked transaction to recompute amount_paid + status
+      const tx = await env.DB.prepare(
+        `SELECT id, amount, amount_paid, status
+           FROM ${txTable}
+          WHERE user_id = ? AND id = ?`,
+      )
+        .bind(user.user_id, pay.transaction_id)
+        .first();
+      if (!tx) return json({ error: "Linked transaction not found" }, 404, cors());
+
+      const amountTotal = Number(tx.amount) || 0;
+      const currentPaid = Number(tx.amount_paid) || 0;
+      const oldAmount = Number(pay.payment_amount) || 0;
+      const otherPaid = currentPaid - oldAmount;
+
+      // Max allowed for this payment so we don't exceed total tx amount
+      const maxForThisPayment = Math.max(0, amountTotal - otherPaid);
+      if (newAmount > maxForThisPayment) {
+        return json(
+          {
+            error: "Το ποσό είναι μεγαλύτερο από το επιτρεπόμενο υπόλοιπο για αυτή τη συναλλαγή.",
+          },
+          400,
+          cors(),
+        );
+      }
+
+      const updatedPaid = otherPaid + newAmount;
+      const updatedStatus = updatedPaid >= amountTotal ? "paid" : "pending";
+
+      newTxPaid = updatedPaid;
+      newTxStatus = updatedStatus;
+
+      sets.push("payment_amount = ?");
+      vals.push(newAmount);
+    }
+
+    // --- date ---
     if (b?.date !== undefined) {
       const d = String(b.date).trim();
       if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) {
@@ -68,12 +128,31 @@ export async function onRequest({ request, env, params }: any) {
       sets.push("payment_date = ?");
       vals.push(d || null);
     }
+
+    // --- notes ---
     if (b?.notes !== undefined) {
       sets.push("notes = ?");
       vals.push((b.notes ?? "").toString().trim().slice(0, 2000) || null);
     }
+
     if (sets.length === 0) return json({ error: "No fields to update" }, 400, cors());
 
+    // First, if needed, update the linked transaction
+    if (newTxPaid !== null && newTxStatus !== null) {
+      const resTx = await env.DB.prepare(
+        `UPDATE ${txTable}
+            SET amount_paid = ?, status = ?
+          WHERE user_id = ? AND id = ?`,
+      )
+        .bind(newTxPaid, newTxStatus, user.user_id, pay.transaction_id)
+        .run();
+
+      if (!resTx.meta || resTx.meta.changes === 0) {
+        return json({ error: "Failed to update linked transaction" }, 500, cors());
+      }
+    }
+
+    // Then update the payment row itself
     vals.push(user.user_id, id);
     const res = await env.DB.prepare(
       `UPDATE customer_payments SET ${sets.join(", ")} WHERE user_id = ? AND id = ?`,
@@ -82,7 +161,17 @@ export async function onRequest({ request, env, params }: any) {
       .run();
 
     if (!res.meta || res.meta.changes === 0) return json({ error: "Not found" }, 404, cors());
-    return json({ ok: true }, 200, cors());
+
+    return json(
+      {
+        ok: true,
+        transaction_id: pay.transaction_id,
+        amount_paid: newTxPaid,
+        status: newTxStatus,
+      },
+      200,
+      cors(),
+    );
   }
 
   // DELETE = void payment (reverse effect on linked transaction) then delete row
@@ -143,6 +232,8 @@ export async function onRequest({ request, env, params }: any) {
 
   return json({ error: "Method not allowed" }, 405, cors());
 }
+
+// json, safeJson, hasTable, getUserFromSession helpers stay as you have them
 
 /* helpers */
 function json(data: any, status = 200, headers?: Record<string, string>) {

@@ -550,7 +550,12 @@ export default function CustomersPage() {
       if (isEditingTx && tx.id) {
         await updateCustomerTransactionApi(tx.id, {
           ...tx,
+          productName: payload.productName,
+          amount: payload.amount,
+          amountPaid: payload.amountPaid,
+          date: payload.date,
           status: tx.status,
+          notes: payload.notes,
         });
         toast({ title: "Ενημερώθηκε", description: "Η συναλλαγή ενημερώθηκε." });
       } else {
@@ -562,6 +567,7 @@ export default function CustomersPage() {
       setTransactions(list);
       const cs = await fetchCustomersApi();
       setCustomers(cs);
+      setHistoryRefresh((k) => k + 1);
     } catch (e) {
       console.error(e);
       toast({
@@ -1220,6 +1226,15 @@ export default function CustomersPage() {
         customerId={selectedCustomer?.id || undefined}
         refreshKey={historyRefresh}
         pageSize={10}
+        onChanged={async () => {
+          if (!selectedCustomer?.id) return;
+          const list = await fetchCustomerTransactions(selectedCustomer.id);
+          setTransactions(list);
+
+          const cs = await fetchCustomersApi();
+          setCustomers(cs);
+          setHistoryRefresh((k) => k + 1);
+        }}
       />
     </div>
   );
